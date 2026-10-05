@@ -460,12 +460,12 @@
       ],
       "steps": [
         "Player opens the leaderboard for a course.",
-        "Backend computes the best saved verified completion per account for the selected level.",
+        "Backend computes the best saved eligible completion per account for the selected level.",
         "Application sorts ascending active elapsed milliseconds and displays rank, display name and best time.",
         "Player can change the selected course."
       ],
       "alternate": "With no completion records, display an empty leaderboard. Ties share rank; stable ordering uses account UUID after elapsed time.",
-      "exception": "Network errors display Retry. Unsaved, unverified or incomplete attempts are excluded. No email or credential data is exposed.",
+      "exception": "Network errors display Retry. Unsaved, ineligible or incomplete attempts are excluded. No email or credential data is exposed.",
       "pre": "Course exists; trusted completion recording and a bounded public leaderboard endpoint are implemented.",
       "post": "Leaderboard reflects persisted eligible results or a clear empty/error state.",
       "requirement": "R10",

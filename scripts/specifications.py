@@ -93,9 +93,9 @@ add(9,'Earn and view achievements',['Logged-in player'],['Backend evaluates a sa
 'Player identity; level/completion/save event; active elapsed milliseconds.',[
 'The first three achievement codes shall be first_completion, first_created_level and first_flight_under_30s.','The timed goal shall require elapsed_ms < 30000 for First Flight; deaths retain time and pauses exclude inactive time.','Player-achievement pairs shall be unique; backend rules shall determine awards from saved events.','Awards shall persist to the account and not grant guest preview persistence.'],
 'Persistent awards and progress list, or pending error state.', 'Planned logical model',['play_attempts','levels','achievements','player_achievements'])
-add(10,'View leaderboard',['Player'],['Player opens the leaderboard for a course.','Backend computes the best saved verified completion per account for the selected level.','Application sorts ascending active elapsed milliseconds and displays rank, display name and best time.','Player can change the selected course.'],
+add(10,'View leaderboard',['Player'],['Player opens the leaderboard for a course.','Backend computes the best saved eligible completion per account for the selected level.','Application sorts ascending active elapsed milliseconds and displays rank, display name and best time.','Player can change the selected course.'],
 'With no completion records, display an empty leaderboard. Ties share rank; stable ordering uses account UUID after elapsed time.',
-'Network errors display Retry. Unsaved, unverified or incomplete attempts are excluded. No email or credential data is exposed.',
+'Network errors display Retry. Unsaved, ineligible or incomplete attempts are excluded. No email or credential data is exposed.',
 'Course exists; trusted completion recording and a bounded public leaderboard endpoint are implemented.',
 'Leaderboard reflects persisted eligible results or a clear empty/error state.',
 'Level UUID; optional bounded result limit (top 50).',[

@@ -18,7 +18,7 @@ All **13 live integration checks passed** using two user-supplied dedicated acco
 
 ## Hosted browser
 
-https://drat-git.github.io/skystride-adventures/ loads successfully. Browse courses returns one actual published course; Play course launches its validated layout. Main menu, sign-in, registration, course list and game screens captured with actual navigation. Site URL and exact hosted/local authentication redirects were saved. Invalid login returns the real provider error without claiming a session. Supabase's default email confirmation remains enabled. GitHub repository and public board are real; task statuses reflect observed work. Team assignees remain deferred.
+https://drat-git.github.io/skystride-adventures/ loads successfully. Browse courses returns one actual published course; Play course launches its validated layout. Main menu, sign-in, registration, course list and game screens captured with actual navigation. Site URL and exact hosted/local authentication redirects were saved. Invalid login returns the real provider error without claiming a session. Supabase's default email confirmation remains enabled. GitHub repository and public board are real; task statuses reflect observed work. Team assignees remain deferred. The final deployment (commit 854a24e) passed tests/build/deploy, and its existing-account login, saved profile, refresh restoration and logout were verified in a fresh hosted browser tab.
 
 ## Pending before submission
 
