@@ -1,0 +1,30 @@
+import { afterAll,beforeAll,it,expect } from 'vitest';
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync } from 'node:fs';
+import { practiceLevel } from '../src/level';
+const db=new PGlite();
+const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',L=practiceLevel.id;
+async function role(name:string,user=''){await db.exec(`reset role;set role ${name};`);await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);}
+beforeAll(async()=>{
+ await db.exec(`create role anon;create role authenticated;create schema auth;
+ create table auth.users(id uuid primary key,raw_user_meta_data jsonb);
+ create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+ grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
+ await db.exec(readFileSync(new URL('../supabase/migrations/001_core.sql',import.meta.url),'utf8'));
+ await db.query('insert into auth.users values($1,$2),($3,$4)',[A,{display_name:'Player A'},B,{display_name:'Player B'}]);
+ await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ const seed=await db.query('select layout from levels where id=$1',[L]);expect(seed.rows[0]).toMatchObject({layout:practiceLevel.layout});
+},30000);
+afterAll(async()=>{await db.close();});
+it('trigger creates profiles without passwords',async()=>{await role('authenticated',A);const r=await db.query('select * from profiles');expect(r.rows).toHaveLength(1);expect(r.rows[0]).toMatchObject({id:A,display_name:'Player A'});});
+it('anonymous reads published levels only',async()=>{await role('anon');expect((await db.query('select * from levels')).rows).toHaveLength(1);await expect(db.query('select * from profiles')).rejects.toThrow();});
+it('anonymous cannot write favorites',async()=>{await role('anon');await expect(db.query('insert into favorites values($1,$2,now())',[A,L])).rejects.toThrow();});
+it('cross-account profiles cannot be read or updated',async()=>{await role('authenticated',A);expect((await db.query('select * from profiles where id=$1',[B])).rows).toHaveLength(0);expect((await db.query("update profiles set display_name='Stolen' where id=$1 returning id",[B])).rows).toHaveLength(0);});
+it('own profile changes persist',async()=>{await role('authenticated',A);await db.query("update profiles set display_name='New Name' where id=$1",[A]);expect((await db.query('select display_name from profiles')).rows[0]).toMatchObject({display_name:'New Name'});});
+it('no play means no rating or favorite',async()=>{await role('authenticated',A);await expect(db.query('insert into ratings(user_id,level_id,score) values($1,$2,4)',[A,L])).rejects.toThrow();await expect(db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,L])).rejects.toThrow();});
+it('cannot record another user attempt',async()=>{await role('authenticated',A);await expect(db.query('insert into play_attempts(user_id,level_id) values($1,$2)',[B,L])).rejects.toThrow();});
+it('recorded play allows own rating and favorite',async()=>{await role('authenticated',A);await db.query('insert into play_attempts(user_id,level_id) values($1,$2)',[A,L]);await db.query('insert into ratings(user_id,level_id,score) values($1,$2,4)',[A,L]);await db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,L]);expect((await db.query('select * from ratings')).rows).toHaveLength(1);});
+it('rating range and duplicate relationship constraints apply',async()=>{await role('authenticated',A);await expect(db.query('update ratings set score=6')).rejects.toThrow();await expect(db.query('insert into ratings(user_id,level_id,score) values($1,$2,3)',[A,L])).rejects.toThrow();await expect(db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,L])).rejects.toThrow();});
+it('another account cannot impersonate or read private interactions',async()=>{await role('authenticated',B);expect((await db.query('select * from ratings')).rows).toHaveLength(0);await expect(db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,L])).rejects.toThrow();await expect(db.query('insert into ratings(user_id,level_id,score) values($1,$2,5)',[A,L])).rejects.toThrow();});
+it('client cannot forge completions or publish levels',async()=>{await role('authenticated',A);await expect(db.query('insert into play_attempts(user_id,level_id,completed_at,elapsed_ms) values($1,$2,now(),10)',[A,L])).rejects.toThrow();await expect(db.query('update levels set published=false')).rejects.toThrow();});
+it('foreign keys reject nonexistent levels',async()=>{await db.exec('reset role');await expect(db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,'cccccccc-cccc-4ccc-8ccc-cccccccccccc'])).rejects.toThrow();});

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env*
+!.env.example
+*.log
+.DS_Store
+docs/evidence/private/
+output/
+Sprint_2_New_Project_Handoff.md

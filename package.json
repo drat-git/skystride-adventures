@@ -1,0 +1,28 @@
+{
+  "name": "skystride-adventures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:integration": "node --env-file=.env.local scripts/integration.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@types/node": "^22.20.5",
+    "typescript": "5.9.3",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}
