@@ -1,6 +1,6 @@
 import { describe,it,expect } from 'vitest';
 import { validateLayout,practiceLevel,parseLevel } from '../src/level';
-import { validateAccount } from '../src/auth';
+import { validateAccount, validateLogin } from '../src/auth';
 import { Attempt } from '../src/attempt';
 describe('untrusted level data',()=>{
  it('accepts the reproducible course',()=>expect(()=>parseLevel(practiceLevel)).not.toThrow());
@@ -17,3 +17,5 @@ describe('attempt semantics',()=>{
   expect(a.finish()).toBe(false);a.paused=false;a.tick(200);expect(a.finish()).toBe(true);expect(a.finish()).toBe(false);a.tick(500);expect(a.elapsedMs).toBe(500);
  });
 });
+
+it('accepts existing short passwords only at sign-in',()=>{expect(()=>validateLogin('player@example.com','secret')).not.toThrow();expect(()=>validateLogin('player@example.com','')).toThrow();expect(()=>validateAccount('player@example.com','secret','Player')).toThrow();});

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { parseLevel, type Level } from './level';
-import { validateAccount, validateDisplayName } from './auth';
+import { validateAccount, validateLogin, validateDisplayName } from './auth';
 const url = import.meta.env.VITE_SUPABASE_URL?.trim();
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 export const configured = Boolean(url && key && /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url) && !url.includes('YOUR_PROJECT') && !key.includes('YOUR_PUBLIC'));
@@ -17,7 +17,7 @@ export class Backend {
     return data;
   }
   async login(email: string, password: string) {
-    validateAccount(email,password);
+    validateLogin(email,password);
     const {error} = await this.client.auth.signInWithPassword({email:email.trim(),password}); if(error)throw error;
   }
   async logout() { const {error}=await this.client.auth.signOut(); if(error)throw error; }

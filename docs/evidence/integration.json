@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-05T02:42:30.735Z",
+  "environment": "Live Supabase",
+  "checks": [
+    {
+      "name": "Login account A",
+      "status": "PASS"
+    },
+    {
+      "name": "Login account B",
+      "status": "PASS"
+    },
+    {
+      "name": "Anonymous published level read",
+      "status": "PASS"
+    },
+    {
+      "name": "Profile round trip",
+      "status": "PASS"
+    },
+    {
+      "name": "Cannot read another profile",
+      "status": "PASS"
+    },
+    {
+      "name": "Cannot update another profile",
+      "status": "PASS"
+    },
+    {
+      "name": "Valid own rating and favorite",
+      "status": "PASS"
+    },
+    {
+      "name": "Score constraint rejects six",
+      "status": "PASS"
+    },
+    {
+      "name": "Duplicate favorite rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Cross-account writes denied",
+      "status": "PASS"
+    },
+    {
+      "name": "Anonymous writes denied",
+      "status": "PASS"
+    },
+    {
+      "name": "Missing level rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "Logout removes session",
+      "status": "PASS"
+    }
+  ]
+}

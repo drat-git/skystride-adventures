@@ -7,7 +7,7 @@
       [
         "UC01"
       ],
-      "App built; live integration pending"
+      "Implemented; live Auth API and browser sessions verified"
     ],
     [
       "F02",
@@ -133,7 +133,7 @@
         "UC07",
         "UC08"
       ],
-      "SQL built/tested locally; GUI planned"
+      "SQL and live Auth API verified; GUI planned"
     ],
     [
       "F15",
@@ -168,9 +168,9 @@
       "post": "On successful sign-in, a valid session and own persistent profile are available. Successful sign-out removes the session and active private UI. Registration without confirmation yields no signed-in claim.",
       "requirement": "R01",
       "introduction": "The system supports manage account and session with the following observable rules.",
-      "inputs": "Email (max 254 characters), password (8\u2013128 characters), display name (2\u201324 allowed characters); session token managed by provider.",
+      "inputs": "Email (max 254 characters), registration password (8\u2013128 characters), existing login password (1\u2013128 characters), display name (2\u201324 allowed characters); session token managed by provider.",
       "rules": [
-        "The application shall validate email syntax and 8\u2013128-character passwords before account requests.",
+        "The application shall validate email syntax and 8\u2013128-character passwords for registration. Login shall accept existing provider credentials with 1\u2013128 characters.",
         "Display names shall contain only letters, digits, spaces, underscores or hyphens and be 2\u201324 characters.",
         "Managed authentication shall handle credentials; public application tables shall contain no password.",
         "The application shall implement registration, login, logout and restoration after refresh; confirmation-required registration shall display instructions.",
@@ -178,7 +178,7 @@
         "Account changes shall destroy active game/private interface state. Backend errors shall be displayed without pretending that a write succeeded."
       ],
       "outputs": "Confirmation guidance, signed-in profile, saved display name, signed-out navigation, or actionable error.",
-      "status": "Implemented source; local rules tested; live auth pending",
+      "status": "Implemented; login/profile/session/logout verified live; new-user confirmation check pending",
       "tables": [
         "auth.users",
         "profiles"
@@ -213,7 +213,7 @@
         "A future My Favorites filter shall show the current account's favorites only."
       ],
       "outputs": "Published course list; selected scene; future ordered/filtered list; error/empty state.",
-      "status": "Core list source built; live read pending; sorts/filters planned",
+      "status": "Core published list built and live read verified; sorts/filters planned",
       "tables": [
         "levels",
         "ratings",
@@ -375,7 +375,7 @@
         "Future average-rating display shall derive from persisted scores; failures shall not show false saved state."
       ],
       "outputs": "Saved score or rejection; future aggregate average.",
-      "status": "SQL and policies tested locally; live backend and GUI pending",
+      "status": "SQL/policies tested locally and through live authenticated API; GUI planned",
       "tables": [
         "profiles",
         "levels",
@@ -410,7 +410,7 @@
         "Selection shall support personal favorites filtering and descending favorite-count sorting in future UI."
       ],
       "outputs": "Saved add/remove state; future favorites list/count.",
-      "status": "SQL and policies tested locally; live backend and GUI pending",
+      "status": "SQL/policies tested locally and through live authenticated API; GUI planned",
       "tables": [
         "profiles",
         "levels",

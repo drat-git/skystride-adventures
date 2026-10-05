@@ -1,0 +1,21 @@
+# Feature traceability
+
+F01–F15 retain all original categories. R01–R10 match the ten complete use cases; other use cases have planned summaries. Status distinguishes built behavior from future acceptance.
+
+| Feature | Use cases | Requirements | Diagrams | Data | Status | Evidence |
+|---|---|---|---|---|---|---|
+| F01 | UC01 | R01 | account / auth activity | auth.users; profiles | Implemented; live Auth API and browser sessions verified | Source + local tests; live evidence where stated |
+| F02 | UC05, UC13 | R05 | AI activity; creation / AI activity | levels | Planned | Planned acceptance |
+| F03 | UC12 | Future specification | AI activity | Future design | Planned | Planned acceptance |
+| F04 | UC02 | R02 | levels / navigation | favorites; levels; ratings | Published list built; sorts/filters planned | Source + local tests; live evidence where stated |
+| F05 | UC03 | R03 | future settings flow | Device settings (no SQL table) | Planned | Planned acceptance |
+| F06 | UC04 | R04 | levels / navigation / classes | levels; play_attempts (future completion integration) | Built locally | Source + local tests; live evidence where stated |
+| F07 | UC04, UC14 | R04 | levels / navigation / classes; navigation / classes | levels; play_attempts (future completion integration) | Built locally; persistence planned | Source + local tests; live evidence where stated |
+| F08 | UC04 | R04 | levels / navigation / classes | levels; play_attempts (future completion integration) | Built locally | Source + local tests; live evidence where stated |
+| F09 | UC04 | R04 | levels / navigation / classes | levels; play_attempts (future completion integration) | Built locally | Source + local tests; live evidence where stated |
+| F10 | UC15 | Future specification | future item flow | Future design | Planned | Planned acceptance |
+| F11 | UC01, UC02, UC03, UC05, UC09 | R01, R02, R03, R05, R09 | account / auth activity; creation / AI activity; future database; future settings flow; levels / navigation | Device settings (no SQL table); achievements; auth.users; favorites; levels; play_attempts; player_achievements; profiles; ratings | Sprint 2 navigation built | Source + local tests; live evidence where stated |
+| F12 | UC10 | R10 | future database / architecture | play_attempts; profiles | Planned | Planned acceptance |
+| F13 | UC05, UC06 | R05, R06 | creation; creation / AI activity | levels; levels.layout.checkpoints; transient scene state | Checkpoint planned; start respawn built | Source + local tests; live evidence where stated |
+| F14 | UC02, UC07, UC08 | R02, R07, R08 | community / database; levels / navigation | favorites; levels; play_attempts; profiles; ratings | SQL and live Auth API verified; GUI planned | Source + local tests; live evidence where stated |
+| F15 | UC09 | R09 | future database | achievements; levels; play_attempts; player_achievements | Planned | Planned acceptance |

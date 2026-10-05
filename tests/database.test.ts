@@ -11,12 +11,16 @@ beforeAll(async()=>{
  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
  grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
  await db.exec(readFileSync(new URL('../supabase/migrations/001_core.sql',import.meta.url),'utf8'));
+ // Match Supabase's explicit default function grants, then apply the restriction.
+ await db.exec('grant execute on function public.handle_new_user() to anon,authenticated;');
+ await db.exec(readFileSync(new URL('../supabase/migrations/002_trigger_privileges_and_indexes.sql',import.meta.url),'utf8'));
  await db.query('insert into auth.users values($1,$2),($3,$4)',[A,{display_name:'Player A'},B,{display_name:'Player B'}]);
  await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
  const seed=await db.query('select layout from levels where id=$1',[L]);expect(seed.rows[0]).toMatchObject({layout:practiceLevel.layout});
 },30000);
 afterAll(async()=>{await db.close();});
 it('trigger creates profiles without passwords',async()=>{await role('authenticated',A);const r=await db.query('select * from profiles');expect(r.rows).toHaveLength(1);expect(r.rows[0]).toMatchObject({id:A,display_name:'Player A'});});
+it('client roles cannot call the privileged signup trigger',async()=>{await db.exec('reset role');const r=await db.query("select has_function_privilege('anon','public.handle_new_user()','EXECUTE') as guest,has_function_privilege('authenticated','public.handle_new_user()','EXECUTE') as player");expect(r.rows[0]).toEqual({guest:false,player:false});});
 it('anonymous reads published levels only',async()=>{await role('anon');expect((await db.query('select * from levels')).rows).toHaveLength(1);await expect(db.query('select * from profiles')).rejects.toThrow();});
 it('anonymous cannot write favorites',async()=>{await role('anon');await expect(db.query('insert into favorites values($1,$2,now())',[A,L])).rejects.toThrow();});
 it('cross-account profiles cannot be read or updated',async()=>{await role('authenticated',A);expect((await db.query('select * from profiles where id=$1',[B])).rows).toHaveLength(0);expect((await db.query("update profiles set display_name='Stolen' where id=$1 returning id",[B])).rows).toHaveLength(0);});

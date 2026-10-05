@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 features=[
-('F01','Login / Logout Save System','Managed registration, login, logout and persistent account profile.',['UC01'],'App built; live integration pending'),
+('F01','Login / Logout Save System','Managed registration, login, logout and persistent account profile.',['UC01'],'Implemented; live Auth API and browser sessions verified'),
 ('F02','AI Assisted Level Editor System','A generative design coach reviews a draft and suggests routes, hazards, checkpoints and difficulty improvements.',['UC05','UC13'],'Planned'),
 ('F03','AI Assisted Hint System','An on-demand generative gameplay tip uses bounded level and current player context.',['UC12'],'Planned'),
 ('F04','Level Selection System','Browse premade/shared courses; sort by average rating or favorite count and filter My Favorites.',['UC02'],'Published list built; sorts/filters planned'),
@@ -14,7 +14,7 @@ features=[
 ('F11','Main Menu System','Navigate play, account and profile now; editor/settings/progress follow.',['UC01','UC02','UC03','UC05','UC09'],'Sprint 2 navigation built'),
 ('F12','Leaderboard System','List each player\'s best completion time per level.',['UC10'],'Planned'),
 ('F13','Checkpoint / Respawn System','Place checkpoints in the editor; touching one changes the safe death spawn for that attempt.',['UC05','UC06'],'Checkpoint planned; start respawn built'),
-('F14','Level Rating / Favorites System','Rate a played shared level and favorite it with account persistence and selection controls.',['UC02','UC07','UC08'],'SQL built/tested locally; GUI planned'),
+('F14','Level Rating / Favorites System','Rate a played shared level and favorite it with account persistence and selection controls.',['UC02','UC07','UC08'],'SQL and live Auth API verified; GUI planned'),
 ('F15','Achievement System','Save first completion, first created course and a designated timed challenge award to the account.',['UC09'],'Planned')]
 specs=[]
 def add(n,name,actors,steps,alt,exc,pre,post,inputs,rules,outputs,status,tables):
@@ -25,9 +25,9 @@ add(1,'Manage account and session',['Player','Supabase Authentication service'],
 'Invalid inputs remain on the form with a specific message. Invalid/unconfirmed credentials and provider/network errors display recoverable feedback. Failed profile loading is shown as an error. A failed sign-out remains visible and can be retried.',
 'Application is reachable; online account actions require configured reachable Supabase; sign-in requires a registered, confirmed account when confirmation is enabled.',
 'On successful sign-in, a valid session and own persistent profile are available. Successful sign-out removes the session and active private UI. Registration without confirmation yields no signed-in claim.',
-'Email (max 254 characters), password (8–128 characters), display name (2–24 allowed characters); session token managed by provider.',[
-'The application shall validate email syntax and 8–128-character passwords before account requests.','Display names shall contain only letters, digits, spaces, underscores or hyphens and be 2–24 characters.','Managed authentication shall handle credentials; public application tables shall contain no password.','The application shall implement registration, login, logout and restoration after refresh; confirmation-required registration shall display instructions.','The profile UUID shall reference the managed auth UUID; RLS shall restrict reads/updates to that account.','Account changes shall destroy active game/private interface state. Backend errors shall be displayed without pretending that a write succeeded.'],
-'Confirmation guidance, signed-in profile, saved display name, signed-out navigation, or actionable error.', 'Implemented source; local rules tested; live auth pending',['auth.users','profiles'])
+'Email (max 254 characters), registration password (8–128 characters), existing login password (1–128 characters), display name (2–24 allowed characters); session token managed by provider.',[
+'The application shall validate email syntax and 8–128-character passwords for registration. Login shall accept existing provider credentials with 1–128 characters.','Display names shall contain only letters, digits, spaces, underscores or hyphens and be 2–24 characters.','Managed authentication shall handle credentials; public application tables shall contain no password.','The application shall implement registration, login, logout and restoration after refresh; confirmation-required registration shall display instructions.','The profile UUID shall reference the managed auth UUID; RLS shall restrict reads/updates to that account.','Account changes shall destroy active game/private interface state. Backend errors shall be displayed without pretending that a write succeeded.'],
+'Confirmation guidance, signed-in profile, saved display name, signed-out navigation, or actionable error.', 'Implemented; login/profile/session/logout verified live; new-user confirmation check pending',['auth.users','profiles'])
 add(2,'Browse and select a level',['Player'],[
 'Player selects Browse courses.','Application requests published course records from the authorized data API and shows loading feedback.','Application displays title, description and difficulty; player chooses a course.','Application validates the chosen record and layout before creating the game scene.','Game loads the layout belonging to the selected record.'],
 'Player explicitly selects Local practice. Future selection supports rating sort, favorite-count sort, and My Favorites for signed-in players.',
@@ -36,7 +36,7 @@ add(2,'Browse and select a level',['Player'],[
 'The chosen valid course scene is active, or no scene starts and a clear loading/error/empty state remains.',
 'Selected level UUID; database records; future sort/filter selection.',[
 'The application shall read only published courses for ordinary players.','The list shall display title, description and difficulty and launch the actual selected layout.','The application shall validate version 1 geometry on a 24×14 grid before starting a scene.','Loading, empty, invalid-layout and network-error states shall be distinct; Retry shall repeat the request.','Future sorts shall rank descending average rating or favorite count, break ties by title then UUID, and put unrated courses last with an Unrated label.','A future My Favorites filter shall show the current account\'s favorites only.'],
-'Published course list; selected scene; future ordered/filtered list; error/empty state.', 'Core list source built; live read pending; sorts/filters planned',['levels','ratings','favorites'])
+'Published course list; selected scene; future ordered/filtered list; error/empty state.', 'Core published list built and live read verified; sorts/filters planned',['levels','ratings','favorites'])
 add(3,'Change settings',['Player'],['Player opens Settings.','Application loads the saved device reduced-motion preference.','Player switches reduced motion on or off and selects Save.','Application applies that preference to decorative menu motion and stores it on this device.'],
 'Player restores the default preference (off). Keyboard and gameplay physics remain functional for both values.',
 'Unavailable browser storage produces a message; the preference may apply for the current page but is not claimed saved.',
@@ -76,7 +76,7 @@ add(7,'Rate a played level',['Logged-in player'],['Player opens rating controls 
 'One current rating exists per player-level pair, updated score is persisted, or no write occurs.',
 'Current account UUID; level UUID; integer score 1–5.',[
 'The backend shall restrict rating writes to auth.uid() and recorded play eligibility for a published level.','Each player-level pair shall have at most one rating; integer values shall be between 1 and 5.','An eligible player shall be able to replace/remove their own rating; another account\'s records shall be private.','Future average-rating display shall derive from persisted scores; failures shall not show false saved state.'],
-'Saved score or rejection; future aggregate average.', 'SQL and policies tested locally; live backend and GUI pending',['profiles','levels','play_attempts','ratings'])
+'Saved score or rejection; future aggregate average.', 'SQL/policies tested locally and through live authenticated API; GUI planned',['profiles','levels','play_attempts','ratings'])
 add(8,'Manage favorite levels',['Logged-in player'],['Player chooses Favorite for a played published shared course.','Backend checks session, ownership and a recorded play attempt.','Backend inserts a unique player-level favorite.','Application shows a saved favorite state.','Player can remove the favorite or later browse My Favorites.'],
 'Repeated add is idempotent at the application level; removing an absent favorite leaves it absent. Rating and favorite are independent.',
 'Unauthorized, unplayed or unpublished-level requests fail. Network failure leaves the last confirmed state and offers retry.',
@@ -84,7 +84,7 @@ add(8,'Manage favorite levels',['Logged-in player'],['Player chooses Favorite fo
 'At most one account-linked favorite exists for this course, or it has been removed.',
 'Level UUID; authenticated account; add/remove choice.',[
 'The backend shall allow only the current account\'s eligible favorite writes/deletes.','The favorite table shall enforce a composite primary key on user_id and level_id.','Favorites shall persist across sessions independently of ratings.','Selection shall support personal favorites filtering and descending favorite-count sorting in future UI.'],
-'Saved add/remove state; future favorites list/count.', 'SQL and policies tested locally; live backend and GUI pending',['profiles','levels','play_attempts','favorites'])
+'Saved add/remove state; future favorites list/count.', 'SQL/policies tested locally and through live authenticated API; GUI planned',['profiles','levels','play_attempts','favorites'])
 add(9,'Earn and view achievements',['Logged-in player'],['Backend evaluates a saved qualifying event: first completion, first saved created level, or First Flight completed in under 30,000 active milliseconds.','Backend inserts the matching player-achievement award if not already awarded.','Player opens Progress.','Application loads and displays the player\'s persisted achievement names and earned dates.'],
 'Multiple goals can be met by one event; repeating an event does not create duplicate awards.',
 'Failed event/award persistence produces pending/unsaved feedback. Backend rejects requests that attempt to self-award arbitrary achievements.',
