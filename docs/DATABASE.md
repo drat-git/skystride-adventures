@@ -71,8 +71,12 @@ Published metadata and layout are immutable. A creator may copy a published cour
 | completed_at | TIMESTAMPTZ | Yes | If present >= started_at; paired with elapsed_ms | RPC-recorded completion |
 | elapsed_ms | INTEGER | Yes | CHECK >= 0; paired with completion | Client-reported active elapsed time |
 | deaths | INTEGER | No | DEFAULT 0; CHECK >= 0 | Persisted death count |
+| score | INTEGER | Yes | CHECK 0–1,000,000,000 | Final completed-run score, including finish/time bonus |
+| collected | INTEGER | Yes | CHECK 0–2,048 and <= total_items | Unique coins collected in this attempt |
+| total_items | INTEGER | Yes | CHECK 0–2,048 | Loose plus block coins in the course |
+| small_only | BOOLEAN | Yes | Must accompany the other new result fields | Never gained growth/fire/star power |
 
-Clients may insert only `user_id` and `level_id`, for themselves and a published course. Only `complete_attempt` saves results. Its accepted bounds are 0–86,400,000 milliseconds and 0–100,000 deaths; elapsed time cannot exceed server wall-clock duration plus 1,500 milliseconds. Identical completion retries succeed and changed completed results fail. The existing table constraints are retained; the RPC enforces these stricter upper bounds on new client results.
+Clients may insert only `user_id` and `level_id`, for themselves and a published course. `complete_run` saves the current client's complete result atomically. The older `complete_attempt` remains compatible with cached clients and earlier records. Accepted bounds are 0–86,400,000 milliseconds and 0–100,000 deaths; elapsed time cannot exceed server wall-clock duration plus 1,500 milliseconds. Identical completion retries succeed and changed completed results fail. The four new fields are either all NULL (legacy/incomplete) or all present on a completed attempt. Historical times still count toward fastest completions; unknown historical scores are excluded from score rankings.
 
 ## draft_playtests
 
@@ -116,12 +120,16 @@ Favorite uses insert-on-conflict-do-nothing; unfavorite deletes the player's pai
 
 | Attribute | Type | Nullable | Keys / constraints / deletion | Purpose |
 |---|---|---|---|---|
-| code | TEXT | No | PK; fixed three codes | Achievement identity |
+| code | TEXT | No | PK; three original codes plus 18 official-course codes | Achievement identity |
 | name | TEXT | No | Human-readable name | Award label |
-| rule | TEXT | No | CHECK first_completion / first_created_level / timed_course | Backend event rule |
+| rule | TEXT | No | Original rules plus official_all_coins / official_under_15s / official_small_only | Backend event rule |
 | threshold_ms | INTEGER | Yes | Positive for timed rule; NULL otherwise | Catalog threshold, 30,000 ms for Meadow Run |
+| level_id | UUID | Yes | FK levels.id; RESTRICT; required for official-course rules | Specific official course |
+| description | TEXT | No | Default empty string | Visible qualification instructions |
 
 The three codes are `first_created_level`, `first_completion` and `first_flight_under_30s`. Draft creation awards the first once. Normal published-course completion awards the second. The retained timed award key now displays “Meadow Run under 30 seconds” and requires V2 course UUID `22222222-2222-4222-8222-000000000001` and elapsed time strictly below the catalog threshold; it does not depend on the title. Playtest completion and publication do not award completion achievements.
+
+Each official course also has `official_N_all_coins`, `official_N_under_15s` and `official_N_small_only` (N = 1–6). A completed run qualifies independently for each: collect every loose/block coin, finish strictly below 15,000 ms, or never gain growth/fire/star power. Death/checkpoint retries retain the attempt's coin collection and SMALL qualification; Restart creates a new attempt. Historical attempts lack this telemetry and receive no inferred new awards.
 
 ## player_achievements
 
@@ -145,6 +153,8 @@ All UUID identities and expected revisions below are checked on the server. The 
 | `complete_draft_playtest` | `p_test_id uuid`, `p_elapsed_ms integer`, `p_deaths integer` | Test UUID after validating ownership, current revision, bounds and server duration | Authenticated owner |
 | `publish_level` | `p_level_id uuid`, `p_expected_revision integer` | Owner level JSON after atomically checking current revision and a completed qualifying test | Authenticated owner |
 | `complete_attempt` | `p_attempt_id uuid`, `p_elapsed_ms integer`, `p_deaths integer` | Attempt UUID; completion and qualifying awards are atomic | Authenticated attempt owner |
+| `complete_run` | Attempt UUID, elapsed/deaths, score, collected/total coin counts, SMALL-only boolean | Attempt UUID; validates bounds and layout coin total, atomically saves all result fields and qualifying awards; identical retry is safe | Authenticated attempt owner |
+| `course_leaderboard` | `p_level_id uuid`, `p_mode text` (`time` or `score`) | Rank, display name, elapsed milliseconds and nullable score; one actual best completed run per player, shared ranks, deterministic top 50 | Authenticated; published courses only |
 | `level_leaderboard` | `p_level_id uuid` | Rows of `rank bigint`, `display_name text`, `elapsed_ms integer`; one best result per player, ties share rank, UUID tie-break, top 50 | Authenticated; published courses only |
 | `level_statistics` | None | Rows of `level_id uuid`, `average_rating numeric`, `rating_count bigint`, `favorite_count bigint`; unrated average NULL and empty counts zero | Anonymous and authenticated; published courses only |
 | `own_progress` | None | Rows of `level_id uuid`, `best_ms integer`; minimum elapsed time from the caller's completed attempts; ordered by course UUID | Authenticated; invoker security, explicit owner filter and RLS |
@@ -169,6 +179,8 @@ V1 layouts are rejected by both the application and active database constraints.
 
 V2 uses 18px tiles, 25 rows and 24–512 columns with overworld, cave or sky themes. Client and SQL whitelist exact fields and component types; executable data, URLs, pipes and teleport hooks are excluded. Per-array bounds, a 4,096-component cap, a 256 KiB payload limit and a 32,768 expanded-tile budget constrain rendering work. Runs count by width, obstacles by width × height and other components individually. Starts, finishes and checkpoints must be safe and supported; items and loose power-ups must be outside solids and hazards. Moving-platform endpoints stay within the world. The validators check geometry and resource bounds, not reachability; saved-version playtesting remains required for publication.
 
-Items stay in `layout.items`; there is no item table. Collected IDs/counts, active checkpoint, timer and current run state are local to an attempt. Item counts do not affect course completion, saved results, awards or publication. The reduced-motion preference is device-local browser storage and has no database table. AI controls are unavailable placeholders; there are no AI tables, provider keys or provider requests.
+Items stay in `layout.items`; there is no item table. Coin blocks contribute to the total as well. Collection remains optional for completion/publication. The completed run now saves counts for achievement qualification. Active checkpoint and consumed-item identities remain local. Life pickups are converted to coins, life blocks to coin blocks, and both validators reject life content. All courses existing at the run-record migration receive a 150-second limit and a new revision only when the layout changes; affected draft approvals must be retested. New drafts default to 150 seconds.
 
-The server enforces identity, ownership, revisions, result bounds, maximum plausible duration and the existence of a completed saved-version test. It trusts the client to report reaching the finish, elapsed active time and deaths. Tested publication is an ownership/revision workflow under the class-project trust model; it is not production anti-cheat or a server simulation. A modified client could falsely report completion within accepted bounds.
+The reduced-motion preference is device-local browser storage and has no database table. AI controls are unavailable placeholders; there are no AI tables, provider keys or provider requests.
+
+The server enforces identity, ownership, revisions, result bounds, layout coin total, maximum plausible duration and the existence of a completed saved-version test. It trusts the client to report reaching the finish, elapsed active time, deaths, score, collected coins and power history. Tested publication is an ownership/revision workflow under the class-project trust model; it is not production anti-cheat or a server simulation. A modified client could falsely report completion within accepted bounds.

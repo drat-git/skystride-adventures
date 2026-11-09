@@ -2,7 +2,6 @@
 import Phaser from 'phaser';
 import type { Level } from '../level';
 import type { Block, LayoutV2, PowerupKind, MovingPlatform } from '../course-format';
-import type { RunResult } from '../attempt';
 import { buildGameplayContext } from '../ai';
 import { prefersReducedMotion } from '../settings';
 import { createAssets, preloadAssets } from './assets';
@@ -10,7 +9,7 @@ import { AudioEngine } from './AudioEngine';
 import { Player } from './Player';
 import { Enemy } from './Enemy';
 import { RunModel } from './RunModel';
-import type { ControlAction, GameOptions, RunHud } from './types';
+import type { CompletionResult, ControlAction, GameOptions, RunHud } from './types';
 
 type Static = Phaser.Physics.Arcade.StaticGroup;
 type Sprite = Phaser.Physics.Arcade.Sprite;
@@ -43,7 +42,7 @@ export class CourseScene extends Phaser.Scene {
   private flag!: Phaser.GameObjects.Sprite;
   private finishNotified = false;
 
-  constructor(private level: Level & { layout: LayoutV2 }, private onFinish: (result: RunResult) => void, private surface: HTMLElement, private options: GameOptions = {}) {
+  constructor(private level: Level & { layout: LayoutV2 }, private onFinish: (result: CompletionResult) => void, private surface: HTMLElement, private options: GameOptions = {}) {
     super('course'); this.layout = level.layout; this.model = new RunModel(this.layout);
   }
   preload() { preloadAssets(this); }
@@ -81,7 +80,7 @@ export class CourseScene extends Phaser.Scene {
     this.physics.add.collider(this.fireballs, this.blocks, ball => this.bounceFire(ball as Sprite));
     this.physics.add.collider(this.fireballs, this.movingGroup, ball => this.bounceFire(ball as Sprite));
     this.physics.add.overlap(this.fireballs, this.enemies, (ball, mob) => {
-      const enemy = mob as Enemy; if (enemy.mode === 'defeated') return;
+      const enemy = mob as Enemy; if (this.model.status !== 'playing' || enemy.mode === 'defeated') return;
       enemy.knockAway((ball as Sprite).x); this.model.score += 100; this.popup(enemy.x, enemy.y, '100'); this.poof(ball as Sprite);
     });
     for (const spec of this.layout.powerups) this.spawnPower(center(spec.x), center(spec.y), spec.kind, false);
@@ -91,7 +90,7 @@ export class CourseScene extends Phaser.Scene {
     this.bindInput(); this.ready = true;
     if (this.model.status === 'paused' || document.hidden) this.setPaused(true);
     else if (!this.options.demo) this.surface.focus({ preventScroll: true });
-    this.audio.startMusic(this.layout.theme === 'cave' ? 'underground' : 'overworld');
+    this.audio.startMusic(this.layout.theme);
     this.emitState(); this.emitHud();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.releaseInput(); this.audio.dispose(); this.ready = false; });
   }
@@ -229,7 +228,7 @@ export class CourseScene extends Phaser.Scene {
     }
   }
   private spawnPower(x: number, y: number, kind: PowerupKind, emerge: boolean) {
-    const texture = kind === 'growth' ? 'tiles' : kind === 'fire' ? 'gem-fire' : kind === 'star' ? 'gem-star' : 'mushroom-life';
+    const texture = kind === 'growth' ? 'tiles' : kind === 'fire' ? 'gem-fire' : 'gem-star';
     const sprite = this.powers.create(x, y, texture, kind === 'growth' ? 128 : undefined) as Sprite;
     sprite.setData('kind', kind).setDepth(emerge ? -1 : 1).setCollideWorldBounds(true).setBounceX(1);
     const body = sprite.body as Phaser.Physics.Arcade.Body;
@@ -241,11 +240,11 @@ export class CourseScene extends Phaser.Scene {
   private collectPower(sprite: Sprite) {
     if (this.model.status !== 'playing' || this.player.isDead || !sprite.body?.enable || this.player.isTransforming) return;
     const kind = sprite.getData('kind') as PowerupKind; sprite.disableBody(true, true); sprite.destroy();
-    this.model.score += 1000; this.popup(this.player.x, this.player.y, kind === 'life' ? '1UP' : '1000'); this.audio.play(kind === 'life' ? 'oneup' : 'powerup');
+    this.model.score += 1000; this.popup(this.player.x, this.player.y, '1000'); this.audio.play('powerup');
     if (kind === 'growth' && this.player.powerState === 'SMALL') this.player.changeState('BIG');
     if (kind === 'fire') this.player.changeState(this.player.powerState === 'SMALL' ? 'BIG' : 'FIRE');
     if (kind === 'star') this.player.startStar();
-    if (kind === 'life') { this.model.lives++; this.emitState(); }
+    this.model.observePower(this.player.powerState, this.player.starActive);
   }
   private touchEnemy(enemy: Enemy) {
     if (this.model.status !== 'playing' || this.player.isDead || enemy.mode === 'defeated' || this.player.isTransforming) return;
@@ -259,7 +258,7 @@ export class CourseScene extends Phaser.Scene {
     else if (enemy.contactGraceUntil <= this.runTime) this.hurt();
   }
   private shellContact(a: Enemy, b: Enemy) {
-    if (a === b || a.mode === 'defeated' || b.mode === 'defeated') return;
+    if (this.model.status !== 'playing' || a === b || a.mode === 'defeated' || b.mode === 'defeated') return;
     if (a.mode === 'shell' && a.shellMoving) { b.knockAway(a.x); this.model.score += 200; this.popup(b.x, b.y, '200'); }
     else if (b.mode === 'shell' && b.shellMoving) { a.knockAway(b.x); this.model.score += 200; this.popup(a.x, a.y, '200'); }
   }
@@ -301,9 +300,11 @@ export class CourseScene extends Phaser.Scene {
     this.scene.restart();
   }
   private finish(top: number, bottom: number) {
+    this.model.observePower(this.player.powerState, this.player.starActive);
     if (!this.model.finish()) return;
     const ratio = Phaser.Math.Clamp((bottom - this.player.body.bottom) / (bottom - top), 0, 1);
     this.model.score += 100 + Math.round(ratio * 49) * 100 + Math.ceil(this.model.remainingMs / 1000) * 50;
+    const completed = this.model.result();
     this.clearControls(); this.audio.stopMusic(); this.audio.play('flag'); this.player.body.enable = false;
     this.player.x = center(this.layout.finish.x) + 10; this.player.setFlipX(true).play(`${this.player.animPrefix}-jump`);
     this.tweens.add({ targets: this.flag, y: bottom - 18, duration: 700 });
@@ -313,7 +314,7 @@ export class CourseScene extends Phaser.Scene {
         this.player.play(`${this.player.animPrefix}-idle`); this.physics.pause();
         if (this.options.demo) { this.time.delayedCall(700, () => { this.model = new RunModel(this.layout); this.scene.restart(); }); return; }
         this.emitState(); this.emitHud();
-        if (!this.finishNotified) { this.finishNotified = true; this.onFinish(this.model.attempt.result()); }
+        if (!this.finishNotified) { this.finishNotified = true; this.onFinish(completed); }
       } });
     } });
   }
@@ -355,7 +356,7 @@ export class CourseScene extends Phaser.Scene {
       if (paused) { this.physics.pause(); this.time.paused = true; this.tweens.pauseAll(); this.audio.suspend(); }
       else {
         this.time.paused = false; this.tweens.resumeAll(); if (!this.transforming) this.physics.resume();
-        if (!this.options.demo) this.surface.focus({ preventScroll: true }); this.audio.unlock(); this.audio.startMusic(this.layout.theme === 'cave' ? 'underground' : 'overworld');
+        if (!this.options.demo) this.surface.focus({ preventScroll: true }); this.audio.unlock(); this.audio.startMusic(this.layout.theme);
       }
       for (const child of this.children.list) if (child instanceof Phaser.GameObjects.Sprite) paused ? child.anims.pause() : child.anims.resume();
     }
@@ -364,7 +365,7 @@ export class CourseScene extends Phaser.Scene {
   private emitState() { this.options.onState?.(this.model.state()); }
   private emitHud() {
     if (!this.player) return;
-    const hud: RunHud = { ...this.model.attempt.result(), score: this.model.score, lives: this.model.lives, timeLeft: Math.ceil(this.model.remainingMs / 1000), power: this.player.powerState, star: this.player.starActive };
+    const hud: RunHud = { ...this.model.attempt.result(), score: this.model.score, timeLeft: Math.ceil(this.model.remainingMs / 1000), power: this.player.powerState, star: this.player.starActive };
     this.options.onHud?.(hud);
   }
   getContext() { return buildGameplayContext(this.level, { position: this.player ? { x: this.player.x / 18 - .5, y: this.player.y / 18 - .5 } : this.layout.start, checkpoint: this.model.checkpoint, ...this.model.attempt.result(), paused: this.model.status === 'paused', finished: this.model.status === 'complete' }); }
@@ -376,11 +377,12 @@ export class CourseScene extends Phaser.Scene {
       enemies: this.enemies?.getChildren().map(o => { const e = o as Enemy; return { x: e.x, y: e.y, mode: e.mode, direction: e.direction, moving: e.shellMoving }; }) ?? [],
       blocks: this.blockSprites.map(b => ({ x: b.spec.x, y: b.spec.y, kind: b.spec.kind, used: b.used, visible: b.visible, active: b.active })),
       movingPlatforms: this.moving.map(m => ({ x: m.sprite.x, y: m.sprite.y, width: m.spec.width, velocity: { x: bodyOf(m.sprite).velocity.x, y: bodyOf(m.sprite).velocity.y } })),
-      checkpoint: this.model.checkpoint, attempt: this.model.attempt.result(), score: this.model.score, timeLeft: Math.ceil(this.model.remainingMs / 1000),
+      checkpoint: this.model.checkpoint, attempt: this.model.attempt.result(), score: this.model.score, smallOnly: this.model.result().smallOnly, timeLeft: Math.ceil(this.model.remainingMs / 1000),
       powerups: this.powers?.getChildren().map(o => { const item = o as Sprite; return { x: item.x, y: item.y, kind: item.getData('kind'), active: item.active }; }) ?? [], fireballs: this.fireballs?.countActive() ?? 0 });
   }
   update(_time: number, delta: number) {
     if (!this.ready || this.model.status !== 'playing') return;
+    this.model.observePower(this.player.powerState, this.player.starActive);
     if (this.options.demo && prefersReducedMotion()) { this.player.handleInput(false, false, false, false); return; }
     this.model.tick(delta); this.runTime += delta;
     if (this.runTime - this.lastHud >= 100) { this.emitHud(); this.lastHud = this.runTime; }

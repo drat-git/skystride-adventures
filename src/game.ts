@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { validateLayout, type Level } from './level';
-import type { RunResult } from './attempt';
+import type { CompletionResult as RunResult } from './runtime/types';
 import { ManagedGame } from './runtime/ManagedGame';
 import { CourseScene } from './runtime/CourseScene';
 import type { GameOptions } from './runtime/types';
-export type { RunResult } from './attempt';
+export type { CompletionResult as RunResult } from './runtime/types';
 export type { GameOptions, RunState, RunHud, ControlAction } from './runtime/types';
 export { CourseScene } from './runtime/CourseScene';
 

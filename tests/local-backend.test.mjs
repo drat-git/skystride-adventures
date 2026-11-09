@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
-import { mkdtemp, readFile, stat, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -115,7 +115,7 @@ it('persists SQL, hashed local credentials and sessions across server restarts',
   const response=await fetch(second.url+'/auth/v1/user',{headers:{apikey:LOCAL_PUBLIC_KEY,authorization:'Bearer '+registered.session.access_token}});expect(response.status).toBe(200);
   const restored=client(second.url);expect(unwrap(await restored.auth.signInWithPassword({email:'persist@example.test',password})).user.id).toBe(registered.user.id);
   expect(unwrap(await restored.from('profiles').select('display_name').eq('id',registered.user.id).single()).display_name).toBe('Persistent');
-  expect((await second.admin('select count(*)::int count from local_dev.migrations'))[0].count).toBe(9);
+  expect((await second.admin('select count(*)::int count from local_dev.migrations'))[0].count).toBe((await readdir(new URL('../supabase/migrations/',import.meta.url))).filter(n=>n.endsWith('.sql')).length);
   await restored.auth.signOut();
  }finally{await first?.close();await second?.close();await rm(directory,{recursive:true,force:true});}
 },30000);

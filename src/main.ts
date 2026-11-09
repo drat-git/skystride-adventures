@@ -20,6 +20,7 @@ let screen = 'title';
 let screenCleanup: (() => void) | undefined;
 let runCanLeave: (() => boolean) | undefined;
 const guestProgress = new Map<string, number>();
+const guestCourseTitles = new Map<string, string>();
 let browseOrder: CourseOrder = 'title';
 let favoritesOnly = false;
 let accountStatusError = '';
@@ -27,7 +28,7 @@ const motion = readMotionPreference();
 let motionStorageError = motion.error;
 applyMotionPreference(motion.value);
 const escape = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-const button = (id: string, text: string, secondary = false) => `<button id="${id}" class="${secondary ? 'secondary' : ''}">${text}</button>`;
+const button = (id: string, text: string, secondary = false, className = '') => `<button id="${id}" class="${secondary ? 'secondary' : ''} ${className}">${text}</button>`;
 function on(id: string, fn: () => void | Promise<void>) {
   document.getElementById(id)?.addEventListener('click', event => { event.preventDefault(); void fn(); });
 }
@@ -47,8 +48,8 @@ function shell(title: string, body: string) {
   root.className = `screen-${screen}`;
   root.innerHTML = `<header class="game-header"><a href="#" id="brand" class="brand"><span class="player-icon" aria-hidden="true"></span><span>SKYSTRIDE<small>ADVENTURES</small></span></a><nav aria-label="Main navigation">${screen === 'home' ? '' : button('menu', 'Main menu', true)}<div class="account">${session ? `${button('account', 'My account', true)}${button('signout', 'Sign out', true)}` : button('signin', 'Sign in', true)}</div></nav></header>
     <div id="account-status" class="message error global-status" role="alert" ${accountStatusError ? '' : 'hidden'}>${escape(accountStatusError)}</div>
-    <main><div class="page-heading"><p class="eyebrow">${screen === 'play' ? 'THE ADVENTURE CONTINUES' : 'SKYSTRIDE ADVENTURES'}</p><h1 tabindex="-1">${title}</h1></div>${body}</main>
-    <footer><span>${localBackend ? 'LOCAL DEVELOPMENT · Separate test accounts and database' : 'Six little worlds. One more jump.'}</span>${button('credits', 'Credits', true)}</footer>`;
+    <main><div class="page-heading"><h1 tabindex="-1">${title}</h1></div>${body}</main>
+    <footer>${localBackend ? '<span>LOCAL DEVELOPMENT · Separate test accounts and database</span>' : ''}${button('credits', 'Credits', true)}</footer>`;
   onNavigate('brand', home); onNavigate('menu', home); onNavigate('signin', () => auth(false)); onNavigate('account', profile); on('signout', signout); onNavigate('credits', credits);
   document.querySelector<HTMLElement>('h1')?.focus({preventScroll:true});
 }
@@ -89,8 +90,8 @@ async function signout() {
 }
 function home() {
   screen = 'home';
-  shell('Your next adventure<br><em>starts up here.</em>', `<div class="menu-world" aria-hidden="true"><span class="menu-cloud c1"></span><span class="menu-cloud c2"></span><span class="menu-island"><i class="player-icon"></i></span><span class="menu-island small-island"></span></div>
-    <div class="main-menu" aria-label="Main menu"><div class="primary-menu">${button('official', '<span class="menu-glyph">▶</span> Play adventure <small>Six official courses · three worlds</small>')}${button('levels', '<span class="menu-glyph">♧</span> Community courses <small>Discover, rate, and favorite new routes</small>', true)}${button('editor', '<span class="menu-glyph">✦</span> Course workshop <small>Create, test, and publish your own</small>', true)}</div>
+  shell('Main Menu', `<div class="menu-world" aria-hidden="true"><span class="menu-cloud c1"></span><span class="menu-cloud c2"></span><span class="menu-island"><i class="player-icon"></i></span><span class="menu-island small-island"></span></div>
+    <div class="main-menu" aria-label="Main menu"><div class="primary-menu">${button('official', '<span class="menu-glyph">▶</span> Play adventure <small>Six official courses</small>')}${button('levels', '<span class="menu-glyph">♧</span> Community courses <small>Discover, rate, and favorite new routes</small>', true)}${button('editor', '<span class="menu-glyph">✦</span> Course Maker <small>Create, test, and publish your own</small>', true)}</div>
     <div class="secondary-menu">${button('progress', 'My progress', true)}${button('awards', 'Achievements', true)}${button('settings', 'Settings', true)}${button('profile', session ? 'Player profile' : 'Create account', true)}${button('show-title', 'Title screen', true)}</div></div>
     <p id="message" class="menu-note" role="status">${session ? `Welcome back, ${escape(session.user.user_metadata?.display_name || 'adventurer')}.` : 'Play as a guest, or sign in to keep your times and achievements.'} ${localBackend ? 'This preview uses a separate local database.' : ''}</p>`);
   on('official', adventure); on('levels', levels); on('settings', settings);
@@ -102,7 +103,7 @@ function coursePicture(course: Level) {
 }
 async function adventure() {
   screen = 'adventure';
-  shell('Choose your horizon.', `<p class="lead">Meadows, caverns, and open sky. Every course is ready to explore.</p><p id="message" class="message" role="status">${session ? 'Loading your progress…' : 'Guest progress lasts for this visit. Sign in to save your best times.'}</p><div id="official-courses" class="official-courses"></div>`);
+  shell('Official Courses', `<p id="message" class="message" role="status">${session ? 'Loading your progress…' : 'Guest progress lasts for this visit. Sign in to save your fastest completions.'}</p><div id="official-courses" class="official-courses"></div>`);
   const stamp=revision;
   const completed = session ? new Map<string,number>() : new Map(guestProgress);
   let published = new Map<string,Level>();
@@ -119,7 +120,7 @@ async function adventure() {
   const container=document.getElementById('official-courses')!;
   for(const level of officialCourses){
     const saved=published.get(level.id),best=completed.get(level.id), card=document.createElement('article');card.className='official-card';
-    card.innerHTML=`${coursePicture(level)}<div class="course-body"><p class="eyebrow">${String(level.officialOrder).padStart(2,'0')} / ${themeName(level)}</p><h2>${escape(level.title)}</h2><p>${escape(level.description)}</p><span class="course-progress">${best===undefined?'Ready to explore':`✓ Complete · ${(best/1000).toFixed(2)} s`}</span><div class="actions">${button(`official-${level.officialOrder}`,best===undefined?'Play level':'Replay level')}${saved?button(`official-rank-${level.officialOrder}`,'Leaderboard',true):''}</div></div>`;
+    card.innerHTML=`${coursePicture(level)}<div class="course-body"><p class="eyebrow">${String(level.officialOrder).padStart(2,'0')} / ${themeName(level)}</p><h2>${escape(level.title)}</h2>${best===undefined?'':`<span class="course-progress">✓ Fastest completion: ${(best/1000).toFixed(2)} s</span>`}<div class="actions">${button(`official-${level.officialOrder}`,best===undefined?'Play level':'Replay level')}${saved?button(`official-rank-${level.officialOrder}`,'Leaderboard',true,'leaderboard-link'):''}</div></div>`;
     container.append(card); on(`official-${level.officialOrder}`,()=>play(saved??level,!saved));
     on(`official-rank-${level.officialOrder}`,()=>leaderboard(saved!));
   }
@@ -139,7 +140,12 @@ async function progress() {
     const saved=session&&backend?await backend.progress(session.user.id):[...guestProgress].map(([levelId,bestMs])=>({levelId,bestMs,completed:true}));
     if(stamp!==revision)return;
     const done=new Map(saved.filter(r=>r.completed).map(r=>[r.levelId,r.bestMs]));
-    document.getElementById('progress-body')!.innerHTML=`<p class="progress-total"><strong>${officialCourses.filter(c=>done.has(c.id)).length}</strong> / 6 courses complete</p><ol class="progress-list">${officialCourses.map(c=>`<li><span>${escape(c.title)}<small>${themeName(c)}</small></span><b>${done.has(c.id)?`✓ ${((done.get(c.id)??0)/1000).toFixed(2)} s`:'Not completed'}</b></li>`).join('')}</ol>`;
+    const officialIds=new Set(officialCourses.map(c=>c.id));
+    const community=saved.filter(r=>r.completed&&r.bestMs!==null&&!officialIds.has(r.levelId));
+    const names=session&&backend&&community.length?new Map((await backend.levels()).map(c=>[c.id,c.title])):guestCourseTitles;
+    if(stamp!==revision)return;
+    const fastest=(ms:number|null|undefined)=>ms==null?'Not completed':`Fastest completion: ${(ms/1000).toFixed(2)} s`;
+    document.getElementById('progress-body')!.innerHTML=`<p class="progress-total"><strong>${officialCourses.filter(c=>done.has(c.id)).length}</strong> / 6 courses complete</p><ol class="progress-list">${officialCourses.map(c=>`<li><span>${escape(c.title)}<small>${themeName(c)}</small></span><b>${fastest(done.get(c.id))}</b></li>`).join('')}</ol>${community.length?`<h2>Community Courses</h2><ul class="progress-list">${community.map(c=>`<li><span>${escape(names.get(c.levelId)??'Community course')}</span><b>${fastest(c.bestMs)}</b></li>`).join('')}</ul>`:''}`;
     message(session?'Best times are saved to your account.':"Guest progress is kept for this visit only. Sign in to retain future runs.");
   }catch(error){if(stamp===revision)message(errorText(error),true);}
 }
@@ -178,7 +184,7 @@ async function profile() {
   on('back', home); const stamp = revision, uid = session.user.id;
   try {
     const p = await backend.profile(uid); if (stamp !== revision) return;
-    document.getElementById('profilebody')!.innerHTML = `<form id="profileform"><label>Display name<input name="name" value="${escape(p.display_name)}" required minlength="2" maxlength="24" pattern="[A-Za-z0-9 _-]{2,24}"></label><p class="small">Saved to your account in the database.</p><button>Save display name</button></form>`;
+    document.getElementById('profilebody')!.innerHTML = `<form id="profileform"><label>Email<input type="email" value="${escape(session?.user.email ?? '')}" readonly autocomplete="email"></label><label>Display name<input name="name" value="${escape(p.display_name)}" required minlength="2" maxlength="24" pattern="[A-Za-z0-9 _-]{2,24}"></label><p class="small">Saved to your account in the database.</p><button>Save display name</button></form>`;
     message('Profile loaded.');
     document.querySelector<HTMLFormElement>('#profileform')!.addEventListener('submit', async event => {
       event.preventDefault(); const form = event.currentTarget as HTMLFormElement, control = form.querySelector('button')!; control.disabled = true;
@@ -193,7 +199,7 @@ function stats(course: CourseSummary) {
 }
 async function levels() {
   screen = 'levels'; if (!session) favoritesOnly = false;
-  shell('Choose a course.', `<p class="lead">A new route, a personal best, or an old favorite.</p>
+  shell('Community Courses', `<p class="lead">A new route, a personal best, or an old favorite.</p>
     <div class="browse-controls"><label>Sort courses<select id="course-order"><option value="title">Title</option><option value="rating">Highest rating</option><option value="favorites">Most favorites</option></select></label>
     <label class="check-label"><input id="favorites-only" type="checkbox" ${session ? '' : 'disabled'}>My Favorites</label>${session ? '' : '<span class="small">Sign in to view your favorites.</span>'}</div>
     <p id="message" role="status" class="message">Loading online courses…</p><div id="courses" class="courses"></div>
@@ -212,7 +218,7 @@ async function levels() {
       message(shown.length ? `${shown.length} published course${shown.length === 1 ? '' : 's'} loaded from the database.` : favoritesOnly ? 'No favorites yet. Play a course, then add it to your favorites.' : 'No published courses yet.');
       for (const [i, course] of shown.entries()) {
         const card = document.createElement('article'); card.className = 'course';
-        card.innerHTML = `${coursePicture(course)}<div class="course-body"><span class="badge">${escape(course.difficulty)}</span><h2>${escape(course.title)}</h2><p>${escape(course.description)}</p><p class="course-stats">${stats(course)}${course.isFavorite ? ' · Your favorite' : ''}</p>${button(`course-${i}`, 'Play course')}${button(`details-${i}`, 'Course details', true)}${button(`ranking-${i}`, 'Leaderboard', true)}</div>`;
+        card.innerHTML = `${coursePicture(course)}<div class="course-body"><span class="badge">${escape(course.difficulty)}</span><h2>${escape(course.title)}</h2><p class="course-stats">${stats(course)}${course.isFavorite ? ' · Your favorite' : ''}</p><div class="actions">${button(`course-${i}`, 'Play level')}${button(`details-${i}`, 'Course details', true)}${button(`ranking-${i}`, 'Leaderboard', true,'leaderboard-link')}</div></div>`;
         container.append(card);
         on(`course-${i}`, () => play(course, false)); on(`details-${i}`, () => courseDetails(course)); on(`ranking-${i}`, () => leaderboard(course));
       }
@@ -223,8 +229,8 @@ async function levels() {
 }
 async function courseDetails(level: Level) {
   screen = 'details';
-  shell(escape(level.title), `<span class="badge">${escape(level.difficulty)}</span><p class="lead">${escape(level.description)}</p><p id="course-stats" class="course-stats"></p>
-    <div class="actions">${button('play-course', 'Play course')}${button('leaderboard', 'Leaderboard', true)}</div>
+  shell(escape(level.title), `<span class="badge">${escape(level.difficulty)}</span><p id="course-stats" class="course-stats"></p>
+    <div class="actions">${button('play-course', 'Play level')}${button('leaderboard', 'Leaderboard', true,'leaderboard-link')}</div>
     <section class="community-panel" aria-label="Rating and favorites"><div id="interactions"></div></section><p id="message" class="message" role="status">Loading course details…</p>
     <div class="actions">${button('refresh-details', 'Refresh details', true)}${button('back', 'Back to courses', true)}</div>`);
   on('play-course', () => play(level, false)); on('leaderboard', () => leaderboard(level)); on('back', level.officialOrder ? adventure : levels); on('refresh-details', () => courseDetails(level));
@@ -266,7 +272,7 @@ async function courseDetails(level: Level) {
 }
 function editor() {
   if (!session || !backend) { auth(false); return; }
-  screen = 'editor'; shell('Build your next flight.', `<div id="editor"></div>${button('back', 'Back to menu', true)}`);
+  screen = 'editor'; shell('Course Maker', `<div id="editor"></div>${button('back', 'Back to menu', true)}`);
   onNavigate('back', home);
   editorController = mountEditor(document.getElementById('editor')!, backend, session.user.id);
 }
@@ -289,33 +295,39 @@ async function awards() {
   on('back', home); on('refresh-awards', awards); const stamp = revision;
   try {
     const list = await backend.awards(session.user.id); if (stamp !== revision) return;
-    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${a.earned_at ? `Earned ${escape(new Date(a.earned_at).toLocaleDateString())}` : a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? (a.threshold_ms == null ? `Complete the timed ${escape(officialCourses[0].title)} challenge.` : `Complete ${escape(officialCourses[0].title)} in under ${a.threshold_ms / 1000} seconds.`) : 'Complete a published course while signed in.'}</p></article>`).join('');
+    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${escape(a.description || (a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? `Complete ${officialCourses[0].title} in under ${(a.threshold_ms??30000)/1000} seconds.` : 'Complete a published course while signed in.'))}</p>${a.earned_at?`<p>Earned ${escape(new Date(a.earned_at).toLocaleDateString())}</p>`:''}</article>`).join('');
     message(`${list.filter(a => a.earned_at).length} of ${list.length} achievements earned.`);
   } catch (error) { if (stamp === revision) message(errorText(error), true); }
 }
-async function leaderboard(level: Level) {
+async function leaderboard(level: Level, mode: 'time'|'score' = 'time') {
   if (!session || !backend) { auth(false); return; }
   screen = 'leaderboard';
-  shell('Course leaderboard.', `<p class="lead">${escape(level.title)} · Best completed time per player (top 50).</p><p class="small">Times are reported by the game client; this class project does not provide production anti-cheat.</p><p id="message" class="message" role="status">Loading results…</p><div id="ranking"></div><div class="actions">${button('refresh-ranking', 'Refresh leaderboard', true)}${button('back', 'Back to courses', true)}</div>`);
-  on('back', level.officialOrder ? adventure : levels); on('refresh-ranking', () => leaderboard(level)); const stamp = revision;
+  shell('Course leaderboard.', `<p class="lead">${escape(level.title)}</p><label class="leaderboard-filter">Rank players by<select id="leaderboard-mode"><option value="time" ${mode==='time'?'selected':''}>Fastest completion</option><option value="score" ${mode==='score'?'selected':''}>Highest score</option></select></label><p class="small">Best completed run per player · Top 50</p><p id="message" class="message" role="status">Loading results…</p><div id="ranking"></div><div class="actions">${button('refresh-ranking', 'Refresh leaderboard', true)}${button('back', 'Back to courses', true)}</div>`);
+  on('back', level.officialOrder ? adventure : levels); on('refresh-ranking', () => leaderboard(level,mode));
+  document.getElementById('leaderboard-mode')!.onchange=event=>void leaderboard(level,(event.target as HTMLSelectElement).value as 'time'|'score');
+  const stamp = revision;
   try {
-    const rows = await backend.leaderboard(level.id); if (stamp !== revision) return;
-    document.getElementById('ranking')!.innerHTML = rows.length ? `<table class="ranking"><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Time</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.rank}</td><td>${escape(row.display_name)}</td><td>${(row.elapsed_ms / 1000).toFixed(2)} s</td></tr>`).join('')}</tbody></table>` : '';
-    message(rows.length ? 'Saved results loaded. Equal times share a rank.' : 'No completed runs yet. Finish this course while signed in to record a time.');
+    const rows = await backend.leaderboard(level.id,mode); if (stamp !== revision) return;
+    document.getElementById('ranking')!.innerHTML = rows.length ? `<table class="ranking"><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">${mode==='time'?'Fastest completion':'Highest score'}</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.rank}</td><td>${escape(row.display_name)}</td><td>${mode==='time'?`${(row.elapsed_ms / 1000).toFixed(2)} s`:String(row.score??0)}</td></tr>`).join('')}</tbody></table>` : '';
+    message(rows.length ? `Saved results loaded. Equal ${mode==='time'?'times':'scores'} share a rank.` : `No ${mode==='time'?'completed runs':'completed runs with saved scores'} yet. Finish this course while signed in to record ${mode==='time'?'a time':'a score'}.`);
   } catch (error) { if (stamp === revision) message(errorText(error), true); }
 }
 async function play(level: Level, local: boolean) {
   screen = 'play'; const save = !local && !!session && !!backend;
   shell(escape(level.title), `<div class="play-topline"><span class="badge">${level.officialOrder ? `LEVEL ${level.officialOrder} / 6` : 'COMMUNITY'} · ${themeName(level)}</span><div class="play-options">${button('sound','Sound on',true)}${button('fullscreen','Fullscreen',true)}${button('pause','Pause',true)}</div></div>
     <div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div></div></div></div>
-    <div id="run-hud" class="run-hud" aria-label="Run statistics"><span>COINS <b id="hud-coins">0 / ${level.layout.items.length}</b></span><span>TIME LEFT <b id="hud-time">—</b><small id="hud-elapsed">0.0 s elapsed</small></span><span>POWER <b id="hud-power">SMALL</b></span><span>LIVES <b id="hud-lives">3</b></span><span>SCORE <b id="hud-score">0</b></span></div>
+    <div id="run-hud" class="run-hud" aria-label="Run statistics"><span>COINS <b id="hud-coins">0 / ${level.layout.items.length+level.layout.blocks.filter(b=>b.content==='coin').length}</b></span><span>TIME ELAPSED <b id="hud-elapsed">0.0 s</b><small>Fastest completion<br><span id="hud-fastest">${save?'Loading…':'Not completed'}</span></small></span><span>POWER <b id="hud-power">SMALL</b></span><span>TIME LIMIT <b id="hud-time">${level.layout.timeLimit} s</b><small>remaining of ${level.layout.timeLimit} s</small></span><span>SCORE <b id="hud-score">0</b></span></div>
     <div class="touch-controls" aria-label="Touch game controls"><div><button data-control="left" aria-label="Move left">◀</button><button data-control="right" aria-label="Move right">▶</button></div><div><button data-control="fire" aria-label="Throw fireball">FIRE</button><button data-control="jump" aria-label="Jump">JUMP</button></div></div>
     <p id="message" class="message" role="status">${save ? 'Starting your account attempt…' : 'Guest practice · This run is not saved to an account.'}</p>
     <div class="actions run-actions">${button('retry','Restart course',true)}<button id="save-result" hidden>Retry saving result</button>${local?'':button('details','Course details',true)}${button('back','Level list',true)}${button('run-menu','Main menu',true)}</div>
     <details class="controls-help"><summary>Controls & assistance</summary><p>← / → or A / D: move · Space / ↑ / W: jump · X / J: throw fireball · Esc: pause. Hold jump for more height.</p><div class="ai-placeholder"><button disabled aria-describedby="ai-hint-status">AI Hint</button><span id="ai-hint-status" class="small">Not available yet.</span></div></details>`);
   let paused=false, attemptId:string|undefined, result:RunResult|undefined, saving=false,resultSaved=false;
   const stamp=revision,uid=session?.user.id, list=level.officialOrder?adventure:levels;
-  const resultText=()=>`${(result!.elapsedMs/1000).toFixed(2)} seconds · ${result!.deaths} deaths · ${result!.collected} / ${result!.totalItems} items`;
+  let fastestMs=save?null:guestProgress.get(level.id)??null, fastestKnown=!save;
+  const showFastest=()=>{if(stamp===revision)document.getElementById('hud-fastest')!.textContent=fastestKnown?(fastestMs===null?'Not completed':`${(fastestMs/1000).toFixed(2)} s`):'Unavailable';};
+  const loadFastest=async()=>{try{const saved=(await backend!.progress(uid!)).find(p=>p.levelId===level.id)?.bestMs??null;if(stamp!==revision)return;fastestKnown=true;fastestMs=resultSaved&&result?Math.min(saved??Infinity,result.elapsedMs):saved;showFastest();}catch{if(stamp===revision&&!fastestKnown)showFastest();}};
+  if(save)void loadFastest();else showFastest();
+  const resultText=()=>`${(result!.elapsedMs/1000).toFixed(2)} seconds · ${result!.score} points · ${result!.deaths} deaths · ${result!.collected} / ${result!.totalItems} coins`;
   runCanLeave=()=>!save||!result||resultSaved||window.confirm('This result has not been confirmed saved. Leave this run?');
   const leave=(fn:()=>void|Promise<void>)=>navigate(fn);
   let soundMuted=false;try{soundMuted=localStorage.getItem('skystride.audio-muted.v1')==='1';}catch{}
@@ -340,13 +352,13 @@ async function play(level: Level, local: boolean) {
   };
   const hud=(state:RunHud)=>{
     if(stamp!==revision)return;
-    for(const [id,text] of Object.entries({'hud-coins':`${state.collected} / ${state.totalItems}`,'hud-time':`${Math.ceil(state.timeLeft)} s`,'hud-elapsed':`${(state.elapsedMs/1000).toFixed(1)} s elapsed`,'hud-power':state.star?'STAR':state.power,'hud-lives':String(state.lives),'hud-score':String(state.score)}))document.getElementById(id)!.textContent=text;
+    for(const [id,text] of Object.entries({'hud-coins':`${state.collected} / ${state.totalItems}`,'hud-time':`${Math.ceil(state.timeLeft)} s`,'hud-elapsed':`${(state.elapsedMs/1000).toFixed(1)} s`,'hud-power':state.star?'STAR':state.power,'hud-score':String(state.score)}))document.getElementById(id)!.textContent=text;
   };
   const persist=async()=>{
     if(!attemptId||!result||stamp!==revision||saving)return;
     const retry=document.getElementById('save-result') as HTMLButtonElement;
     saving=true;retry.disabled=true;message('Course complete. Saving result…');
-    try{await backend!.completeAttempt(attemptId,result.elapsedMs,result.deaths);if(stamp!==revision)return;resultSaved=true;retry.hidden=true;message(`Result saved! ${resultText()}. Your progress, achievements, and leaderboard are updated.`);}
+    try{await backend!.completeAttempt(attemptId,result);if(stamp!==revision)return;resultSaved=true;retry.hidden=true;if(fastestKnown){fastestMs=Math.min(fastestMs??Infinity,result.elapsedMs);showFastest();}else void loadFastest();message(`Result saved! ${resultText()}. Your progress, achievements, and leaderboard are updated.`);}
     catch(error){if(stamp===revision){retry.hidden=false;message(`Result not saved: ${errorText(error)}. Retry saving before leaving this screen.`,true);}}
     finally{saving=false;if(stamp===revision)retry.disabled=false;}
   };
@@ -358,8 +370,8 @@ async function play(level: Level, local: boolean) {
     if(save){attemptId=await backend!.startAttempt(uid!,level.id);if(stamp!==revision)return;message('Reach the flag. Your completed result will be saved.');}
     currentGame=mountGame(document.getElementById('game')!,level,completed=>{
       if(stamp!==revision)return;result=completed;
-      if(!save)guestProgress.set(level.id,Math.min(guestProgress.get(level.id)??Infinity,completed.elapsedMs));
-      overlay({status:'complete',hasCheckpoint:false,lives:0});
+      if(!save){guestProgress.set(level.id,Math.min(guestProgress.get(level.id)??Infinity,completed.elapsedMs));guestCourseTitles.set(level.id,level.title);fastestMs=guestProgress.get(level.id)!;fastestKnown=true;showFastest();}
+      overlay({status:'complete',hasCheckpoint:false});
       if(save)void persist();else message(`Course complete! ${resultText()}. Guest result is not saved to an account.`);
     },{onState:overlay,onHud:hud});
     for(const control of document.querySelectorAll<HTMLButtonElement>('[data-control]')){

@@ -4,6 +4,7 @@
 // (oscillators + gain envelopes), no audio files needed. This is how the
 // sounds of the 80s were made: square and triangle waves with quick
 // pitch sweeps.
+import { musicForTheme } from './music';
 
 const MUTE_KEY = 'skystride.audio-muted.v1';
 
@@ -132,9 +133,6 @@ export class AudioEngine {
       case 'powerup':
         this.arpeggio([392, 523, 659, 784, 1047], { type: 'triangle', vol: 0.25 });
         break;
-      case 'oneup':
-        this.arpeggio([523, 659, 784, 1047, 1319], { step: 0.08 });
-        break;
       case 'hurt':
         this.tone({ from: 400, to: 120, dur: 0.25, vol: 0.25 });
         break;
@@ -148,7 +146,7 @@ export class AudioEngine {
   }
 
   // ------------------------------------------------------------- music
-  // Two tiny original loops, scheduled bar by bar slightly ahead of time.
+  // Theme loops, scheduled slightly ahead of time on the audio clock.
   // Each entry: [lead-note, bass-note] per eighth-note step (0 = rest).
 
   startMusic(kind: string) {
@@ -158,31 +156,7 @@ export class AudioEngine {
     }
     this.stopMusic();
 
-    const C3 = 130.8, E3 = 164.8, F3 = 174.6, G3 = 196, A3 = 220, B2 = 123.5;
-    const C5 = 523, D5 = 587, E5 = 659, F5 = 698, G5 = 784, A5 = 880, E4 = 330, A4 = 440, B4 = 494, C4 = 262, D4 = 294, G4 = 392;
-
-    const tracks: Record<string, { bpm: number; steps: number[][] }> = {
-      overworld: {
-        bpm: 138,
-        steps: [
-          [E5, C3], [0, 0], [G5, G3], [0, 0], [E5, C3], [C5, 0], [D5, G3], [E5, 0],
-          [F5, F3], [0, 0], [A5, C3], [0, 0], [G5, F3], [E5, 0], [D5, G3], [C5, 0],
-          [E5, A3], [0, 0], [G5, E3], [0, 0], [A5, A3], [G5, 0], [E5, E3], [C5, 0],
-          [D5, G3], [E5, 0], [D5, B2], [C5, 0], [C5, C3], [0, 0], [0, G3], [0, 0],
-        ],
-      },
-      underground: {
-        bpm: 112,
-        steps: [
-          [A4, A3], [0, 0], [0, 0], [C5, 0], [0, A3], [0, 0], [B4, E3], [0, 0],
-          [A4, A3], [0, 0], [0, 0], [E4, 0], [0, A3], [0, 0], [G4, E3], [0, 0],
-          [F3 * 2, F3], [0, 0], [0, 0], [A4, 0], [0, F3], [0, 0], [G4, C3], [0, 0],
-          [E4, A3], [0, 0], [0, 0], [0, 0], [B4, E3], [0, 0], [A4, A3], [0, 0],
-        ],
-      },
-    };
-
-    const track = tracks[kind];
+    const track = musicForTheme(kind);
     if (!track) return;
 
     const stepDur = 60 / track.bpm / 2; // eighth notes
@@ -192,10 +166,10 @@ export class AudioEngine {
       track.steps.forEach(([lead, bass], i) => {
         const delay = t0 + i * stepDur - this.ctx!.currentTime;
         if (lead) {
-          this.tone({ type: 'square', from: lead, dur: stepDur * 0.85, delay, vol: 0.07, dest: this.musicGain });
+          this.tone({ type: 'square', from: lead, dur: stepDur * 0.85, delay, vol: track.leadVolume ?? 0.07, dest: this.musicGain });
         }
         if (bass) {
-          this.tone({ type: 'triangle', from: bass, dur: stepDur * 1.6, delay, vol: 0.16, dest: this.musicGain });
+          this.tone({ type: 'triangle', from: bass, dur: stepDur * 1.6, delay, vol: track.bassVolume ?? 0.16, dest: this.musicGain });
         }
       });
     };
@@ -206,6 +180,8 @@ export class AudioEngine {
     // wake up shortly before each loop ends and schedule the next one
     this.musicTimer = setInterval(() => {
       if (this.ctx!.currentTime > nextLoop - 0.3) {
+        // A stalled event loop must not schedule an entire old song in the past.
+        nextLoop = Math.max(nextLoop, this.ctx!.currentTime + 0.01);
         scheduleLoop(nextLoop);
         nextLoop += loopDur;
       }

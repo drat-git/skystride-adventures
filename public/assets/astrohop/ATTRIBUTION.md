@@ -14,7 +14,7 @@ Ported code:
 
 - `src/runtime/Player.ts`: movement constants, state transitions, animations, fixed effective hitbox calculation, squash/stretch, damage and star effects from `src/objects/Player.js`.
 - `src/runtime/Enemy.ts`: walker patrol, ledge probing, stomp and knock-away from `src/objects/Walker.js`; original turtle, winged, and shell extensions.
-- `src/runtime/AudioEngine.ts`: original synthesized effects and two musical loops from `src/audio/sfx.js`; per-mount lifecycle and scheduled-note cleanup added.
+- `src/runtime/AudioEngine.ts` and `src/runtime/music.ts`: synthesized effects and the overworld/cave musical loops from `src/audio/sfx.js`; per-mount lifecycle and scheduled-note cleanup added. The separate eight-bar sky theme, **Skyward Steps**, is an original SkyStride composition made for this project. It uses the same synthesized square-wave lead and triangle-wave bass, with no samples or third-party song recording.
 - `src/runtime/assets.ts`: packed-sheet loading, source animation indices, generated palette swaps and keyed parallax strip from `src/scenes/PreloadScene.js`.
 - `src/runtime/CourseScene.ts`: terrain runs, source collisions, block interactions, power-up emergence, collectibles, projectiles, particles, flag sequence, and camera tuning from `src/scenes/GameScene.js`.
 

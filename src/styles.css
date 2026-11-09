@@ -467,6 +467,17 @@ footer button {
   padding:9px 12px;
   margin:3px 5px 3px 0
 }
+.course-body .leaderboard-link,.leaderboard-link {
+  font-size:11px;
+  padding:7px 9px;
+  border-width:1px;
+  box-shadow:none;
+  background:transparent;
+  color:#bdd1e8
+}
+.leaderboard-filter {
+  max-width:320px
+}
 .course-progress {
   font-size:11px;
   color:#9fdfa8
@@ -1383,8 +1394,8 @@ input[type=checkbox] {
 }
 .run-hud small {
   display:block;
-  font-size:8px;
-  line-height:1.2;
+  font-size:10px;
+  line-height:1.5;
   margin-top:4px;
   color:#a6c4e8
 }

@@ -2,14 +2,17 @@ import type { RunResult } from '../attempt';
 
 export type ControlAction = 'left' | 'right' | 'jump' | 'fire';
 export type PowerState = 'SMALL' | 'BIG' | 'FIRE';
+export interface CompletionResult extends RunResult {
+  score: number;
+  smallOnly: boolean;
+}
 export interface RunState {
   status: 'playing' | 'paused' | 'dead' | 'complete';
   hasCheckpoint: boolean;
-  lives: number;
   reason?: string;
 }
 export interface RunHud extends RunResult {
-  score: number; lives: number; timeLeft: number; power: PowerState; star: boolean;
+  score: number; timeLeft: number; power: PowerState; star: boolean;
 }
 export interface GameOptions { demo?: boolean; onState?: (state: RunState) => void; onHud?: (hud: RunHud) => void }
 export const PHYSICS = Object.freeze({ acceleration: 1600, drag: 1300, speed: 240, fallSpeed: 900,

@@ -25,16 +25,17 @@ Press any key or click the animated title to enter the main menu. **Play adventu
 
 - Move with Left/Right or A/D. Jump with Space, Up or W; hold for a higher jump.
 - Hit glowing blocks from below for coins or power-ups. Growth increases the player; fire enables X/J projectiles; stars give temporary contact protection. Large players can break brick blocks.
-- Stomp walkers, remove wings from flying enemies, and kick shells through enemy groups. Damage reduces power before costing a life.
+- Stomp walkers, remove wings from flying enemies, and kick shells through enemy groups. Damage reduces power before causing a death. Retries are unlimited; there is no lives counter.
+- Current courses start with a 150-second limit. Elapsed time and time remaining have equal HUD emphasis; your saved **Fastest completion** appears beneath elapsed time and alongside completed courses in **My progress**.
 - Reach checkpoints and the finish flag. Optional coins count once, survive checkpoint retries, and reset on a fresh run.
 - Escape or **Pause** opens Resume, Restart, Level list and Main menu. Death offers a checkpoint/start retry. Completion offers Next level, Replay, Level list and Main menu; course6 ends the adventure.
-- **Sound on/off** controls the source-derived synthesized audio. **Settings** controls decorative reduced motion without changing gameplay physics or timing.
+- **Sound on/off** controls synthesized audio, including the original “Skyward Steps” track for sky courses. **Settings** controls decorative reduced motion without changing gameplay physics or timing.
 
-**Course workshop** provides all three themes, large scrollable maps, terrain/platforms, solid/breakable/glowing/hidden blocks, every power-up, coins, hazards, checkpoints, ground/flying enemies, moving platforms, solid obstacles and decorations. Pipes and pipe-entry behavior are excluded. The grid supports keyboard navigation and component inspection.
+**Course Maker** provides all three themes, large scrollable maps, terrain/platforms, solid/breakable/glowing/hidden blocks, every power-up, coins, hazards, checkpoints, ground/flying enemies, moving platforms, solid obstacles and decorations. Pipes and pipe-entry behavior are excluded. The grid supports keyboard navigation and component inspection.
 
 Save a private draft, select **Test saved version**, complete that exact revision, and wait for backend approval before publishing. **Preview draft** tests unsaved work locally and gives no publication approval. Any edit requires saving and retesting. Published courses are immutable; **Copy to new draft** starts a separate private course. Failed saves retain edits, stable IDs make ambiguous retries safe, and revision conflicts offer reload or a separate copy.
 
-**Community courses** retains details, shared rating/favorite totals, personal rating replacement/removal, independent favorite toggles, sorting and My Favorites. Starting a recorded account run unlocks interactions; finishing is optional. Individual interactions remain private. Rankings show the top50 best completed times with shared ranks for ties. Achievements and profiles are available from the menu.
+**Community courses** retains details, shared rating/favorite totals, personal rating replacement/removal, independent favorite toggles, sorting and My Favorites. Starting a recorded account run unlocks interactions; finishing is optional. Individual interactions remain private. Rankings switch between the top50 fastest completions and highest completed-run scores, with shared ranks for ties. Each of the six official courses has separate all-coins, under-15-second, and SMALL-only achievements. SMALL-only requires avoiding growth, fire and star power for the entire attempt; checkpoint retries retain challenge state. Profiles show the signed-in player’s email.
 
 V1 courses, the Classic practice menu, legacy renderer/editor conversion and old seed scripts have been removed. Only V2 courses can be loaded or saved. The timed achievement now rewards Meadow Run in under 30 seconds; previously earned awards remain intact under their stable database identity.
 

@@ -21,7 +21,7 @@ Feature inventory and new entry points:
 | Top-50 best-time rankings, ties | Level list / Course details → Leaderboard |
 | Achievements | Main-menu Achievements / My progress |
 | Ratings, removal, favorites, sorting/filtering | Community courses → Course details |
-| Private draft creation and reliable save/retry | Course workshop |
+| Private draft creation and reliable save/retry | Course Maker |
 | Saved-revision testing, publication, immutable published courses | Workshop controls |
 | Copy published course to a private draft | Workshop Copy to new draft |
 | Unsaved-change prompts, revision conflicts, account isolation | Workshop lifecycle |

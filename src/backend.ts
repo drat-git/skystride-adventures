@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { parseLevel, validateLayout, type Level } from './level';
 import { validateAccount, validateLogin, validateDisplayName } from './auth';
+import type { CompletionResult } from './runtime/types';
 const url = import.meta.env.VITE_SUPABASE_URL?.trim();
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 export const localBackend = import.meta.env.VITE_BACKEND_MODE === 'local';
@@ -11,6 +12,8 @@ export const configured = Boolean(key && !key.includes('YOUR_PUBLIC') && (localB
 export interface OwnedLevel extends Level { revision:number; published:boolean; canPublish:boolean }
 export interface CourseSummary extends Level { averageRating:number|null; ratingCount:number; favoriteCount:number; isFavorite:boolean }
 export interface InteractionState { rating:number|null; favorite:boolean; eligible:boolean }
+export type LeaderboardMode = 'time' | 'score';
+export interface LeaderboardEntry { rank:number; display_name:string; elapsed_ms:number; score:number|null }
 type Statistics = {level_id:string; average_rating:number|string|null; rating_count:number|string; favorite_count:number|string};
 const parseOwnedLevel = (value:unknown):OwnedLevel => {
   const row=value as Record<string,unknown>;
@@ -50,8 +53,8 @@ export class Backend {
     const {data,error}=await this.client.from('play_attempts').insert({user_id:userId,level_id:levelId}).select('id').single();
     if(error)throw error;return data.id;
   }
-  async completeAttempt(id:string,elapsedMs:number,deaths:number) {
-    const {error}=await this.client.rpc('complete_attempt',{p_attempt_id:id,p_elapsed_ms:elapsedMs,p_deaths:deaths});
+  async completeAttempt(id:string,result:CompletionResult) {
+    const {error}=await this.client.rpc('complete_run',{p_attempt_id:id,p_elapsed_ms:result.elapsedMs,p_deaths:result.deaths,p_score:result.score,p_collected:result.collected,p_total_items:result.totalItems,p_small_only:result.smallOnly});
     if(error)throw error;
   }
   async progress(_userId:string):Promise<{levelId:string;completed:boolean;bestMs:number|null}[]> {
@@ -123,12 +126,12 @@ export class Backend {
     const {error}=await query;if(error)throw error;
   }
   async awards(userId:string) {
-    const [catalog,earned]=await Promise.all([this.client.from('achievements').select('code,name,rule,threshold_ms').order('code'),this.client.from('player_achievements').select('achievement_code,earned_at').eq('player_id',userId)]);
+    const [catalog,earned]=await Promise.all([this.client.from('achievements').select('code,name,rule,threshold_ms,level_id,description').order('code'),this.client.from('player_achievements').select('achievement_code,earned_at').eq('player_id',userId)]);
     if(catalog.error)throw catalog.error;if(earned.error)throw earned.error;
     return catalog.data.map(a=>({...a,earned_at:earned.data.find(e=>e.achievement_code===a.code)?.earned_at as string|undefined}));
   }
-  async leaderboard(levelId:string):Promise<{rank:number;display_name:string;elapsed_ms:number}[]> {
-    const {data,error}=await this.client.rpc('level_leaderboard',{p_level_id:levelId});if(error)throw error;return data;
+  async leaderboard(levelId:string,mode:LeaderboardMode='time'):Promise<LeaderboardEntry[]> {
+    const {data,error}=await this.client.rpc('course_leaderboard',{p_level_id:levelId,p_mode:mode});if(error)throw error;return data;
   }
 }
 export const backend = configured ? new Backend() : null;

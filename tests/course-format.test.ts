@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { validateLayout, parseLevel } from '../src/level';
 import { historicalCourse, seedHistoricalV1 } from './fixtures/historical-v1';
 import { validateLayoutV2, type LayoutV2 } from '../src/course-format';
 import officialCourses from '../src/content/official-courses.json';
 
+const current = new PGlite();
 const db = new PGlite(), A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const V2='33333333-3333-4333-8333-000000000001', COPY='33333333-3333-4333-8333-000000000002';
 const migrations=['001_core.sql','002_trigger_privileges_and_indexes.sql','20261019144913_sprint3_progress_and_drafts.sql','20261109042116_sprint4_publishing_and_community.sql','20261109043347_sprint4_non_retrying_revision_conflicts.sql','20261109055844_overhaul_v2_course_format.sql'];
@@ -38,8 +39,10 @@ beforeAll(async()=>{
  await db.exec('reset role');
  legacySnapshot=(await db.query(`select jsonb_build_object('profiles',(select jsonb_agg(p order by id) from profiles p),'levels',(select jsonb_agg(l order by id) from levels l),'attempts',(select jsonb_agg(a order by id) from play_attempts a),'ratings',(select jsonb_agg(r) from ratings r),'favorites',(select jsonb_agg(f) from favorites f),'awards',(select jsonb_agg(a order by achievement_code) from player_achievements a)) state`)).rows[0];
  await db.exec(read(migrations.at(-1)!));
-},30000);
-afterAll(()=>db.close());
+ await current.exec(auth); for (const name of readdirSync(new URL('../supabase/migrations/',import.meta.url)).filter(n=>n.endsWith('.sql')).sort()) await current.exec(read(name));
+},60000);
+afterAll(async()=>{await db.close();await current.close();});
+async function currentValid(value:unknown){return (await current.query<{valid:boolean}>('select private.valid_level_layout($1::jsonb) valid',[JSON.stringify(value)])).rows[0].valid;}
 it('preserves existing records and v1 validation through the additive upgrade',async()=>{
  const after=(await db.query(`select jsonb_build_object('profiles',(select jsonb_agg(p order by id) from profiles p),'levels',(select jsonb_agg(to_jsonb(l)-'official_order' order by id) from levels l),'attempts',(select jsonb_agg(a order by id) from play_attempts a),'ratings',(select jsonb_agg(r) from ratings r),'favorites',(select jsonb_agg(f) from favorites f),'awards',(select jsonb_agg(a order by achievement_code) from player_achievements a)) state`)).rows[0];
  expect(after).toEqual(legacySnapshot);expect(await valid(historicalCourse.layout)).toBe(true);expect(()=>validateLayout(historicalCourse.layout)).toThrow(); // Current application rejects retired layouts; this DB is pinned before retirement.
@@ -55,9 +58,9 @@ const variants:[string,(v:LayoutV2)=>void][]=[
  ['base',()=>{}],['cave',v=>{v.theme='cave';}],['sky',v=>{v.theme='sky';}],
  ['width bounds',v=>{v.cols=512;}],['fractional source speed',v=>{v.enemies[0].speed=40.5;}],
  ...(['solid','breakable'] as const).map(kind=>[kind,(v:LayoutV2)=>{v.blocks[0]={x:10,y:18,kind,content:'none'};}] as [string,(v:LayoutV2)=>void]),
- ...(['coin','adaptive','growth','fire','star','life'] as const).map(content=>['glow '+content,(v:LayoutV2)=>{v.blocks[0].content=content;}] as [string,(v:LayoutV2)=>void]),
- ['hidden life',v=>{v.blocks[0]={x:10,y:18,kind:'hidden',content:'life'};}],
- ...(['growth','fire','star','life'] as const).map(kind=>['powerup '+kind,(v:LayoutV2)=>{v.powerups[0].kind=kind;}] as [string,(v:LayoutV2)=>void]),
+ ...(['coin','adaptive','growth','fire','star'] as const).map(content=>['glow '+content,(v:LayoutV2)=>{v.blocks[0].content=content;}] as [string,(v:LayoutV2)=>void]),
+ ['hidden coin',v=>{v.blocks[0]={x:10,y:18,kind:'hidden',content:'coin'};}],
+ ...(['growth','fire','star'] as const).map(kind=>['powerup '+kind,(v:LayoutV2)=>{v.powerups[0].kind=kind;}] as [string,(v:LayoutV2)=>void]),
  ['turtle',v=>{v.enemies[0].kind='turtle';}],
  ...(['hop','horizontal','vertical'] as const).map(behavior=>['winged '+behavior,(v:LayoutV2)=>{v.enemies[0].kind='winged';v.enemies[0].behavior=behavior;}] as [string,(v:LayoutV2)=>void]),
  ['vertical platform',v=>{v.movingPlatforms[0].axis='y';}],['lava',v=>{v.hazards[0].kind='lava';}],
@@ -66,7 +69,7 @@ const variants:[string,(v:LayoutV2)=>void][]=[
  ['block support',v=>{v.start={x:10,y:17};}],['obstacle support',v=>{v.start={x:60,y:19};}],['platform support',v=>{v.start={x:4,y:17};}],
 ];
 it.each(variants)('accepts matching client and SQL v2 component: %s',async(_name,mutate)=>{
- const v=sample();mutate(v);expect(()=>validateLayoutV2(v)).not.toThrow();expect(()=>validateLayout(v)).not.toThrow();expect(await valid(v)).toBe(true);
+ const v=sample();mutate(v);expect(()=>validateLayoutV2(v)).not.toThrow();expect(()=>validateLayout(v)).not.toThrow();expect(await currentValid(v)).toBe(true);
 });
 const invalid:[string,(v:any)=>void][]=[
  ['unknown version',v=>{v.version=3;}],['missing array',v=>{delete v.enemies;}],['unknown key',v=>{v.script='do things';}],
@@ -75,7 +78,7 @@ const invalid:[string,(v:any)=>void][]=[
  ['cols too short',v=>{v.cols=23;}],['cols too wide',v=>{v.cols=513;}],['fractional cols',v=>{v.cols=80.5;}],['row count',v=>{v.rows=24;}],
  ['timer small',v=>{v.timeLimit=29;}],['timer large',v=>{v.timeLimit=901;}],['timer fractional',v=>{v.timeLimit=30.5;}],['bad flag',v=>{v.finishHeight=21;}],
  ['flag outside world',v=>{v.finish={x:4,y:17};v.finishHeight=20;}],['same finish',v=>{v.finish=v.start;}],['unsafe start',v=>{v.start={x:35,y:22};}],
- ['unsupported checkpoint',v=>{v.checkpoints=[{x:10,y:2}];}],['hidden spawn support',v=>{v.blocks[0]={x:10,y:18,kind:'hidden',content:'life'};v.start={x:10,y:17};}],
+ ['unsupported checkpoint',v=>{v.checkpoints=[{x:10,y:2}];}],['hidden spawn support',v=>{v.blocks[0]={x:10,y:18,kind:'hidden',content:'coin'};v.start={x:10,y:17};}],
  ['item in terrain',v=>{v.items=[{x:1,y:23}];}],['item in obstacle',v=>{v.items=[{x:60,y:21}];}],['item in block',v=>{v.items=[{x:10,y:18}];}],
  ['powerup in hazard',v=>{v.powerups=[{x:36,y:22,kind:'fire'}];}],['duplicate item',v=>{v.items.push(v.items[0]);}],['duplicate typed entity',v=>{v.blocks.push({...v.blocks[0],kind:'solid',content:'none'});}],
  ['fractional point',v=>{v.items[0].x=1.5;}],['point beyond bottom',v=>{v.items[0].y=25;}],['negative point',v=>{v.items[0].x=-1;}],
@@ -88,7 +91,7 @@ const invalid:[string,(v:any)=>void][]=[
  ['excess total entities',v=>{v.cols=512;for(const [key,count] of Object.entries({terrain:512,platforms:512,blocks:1024,items:1024,decorations:1024,checkpoints:1}))v[key]=Array.from({length:count},(_,i)=>({...v[key][0],x:i%512,y:Math.floor(i/512)}));}],
 ];
 it.each(invalid)('rejects matching client and SQL invalid v2: %s',async(_name,mutate)=>{
- const v=sample();mutate(v);expect(()=>validateLayout(v)).toThrow();expect(await valid(v)).toBe(false);
+ const v=sample();mutate(v);expect(()=>validateLayout(v)).toThrow();expect(await currentValid(v)).toBe(false);
 });
 it('round-trips every component through save, exact playtest, publication and copying',async()=>{
  await role('authenticated',A);const first=await save();expect(first).toMatchObject({id:V2,revision:1,published:false,official_order:null,layout:sample()});
@@ -126,7 +129,9 @@ it('seeds six immutable official courses matching the client manifest without re
  await db.exec('reset role');await db.query('update levels set official_order=null where id=$1',[V2]);
  const seed=read('20261109060418_overhaul_official_courses.sql');await db.exec(seed);
  const rows=(await db.query('select id,title,description,difficulty,layout,official_order from levels where official_order is not null order by official_order')).rows;
- expect(rows).toEqual(officialCourses.map(({officialOrder,...course})=>({...course,official_order:officialOrder})));
+ // This fixture intentionally stops before retirement/run-record migrations.
+ const normalized=JSON.parse(JSON.stringify(rows)); for(const row of normalized){row.layout.timeLimit=150;for(const block of row.layout.blocks)if(block.content==='life')block.content='coin';}
+ expect(normalized).toEqual(officialCourses.map(({officialOrder,...course})=>({...course,official_order:officialOrder})));
  const existing=(await db.query('select layout from levels where id=$1',[historicalCourse.id])).rows[0];expect(existing).toEqual({layout:historicalCourse.layout});
  await db.exec(seed);expect((await db.query('select count(*)::int count from levels where official_order is not null')).rows[0]).toEqual({count:6});
  await role('authenticated',B);expect((await db.query('select id from levels where official_order is not null')).rows).toHaveLength(6);

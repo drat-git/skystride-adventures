@@ -5,6 +5,7 @@ import { DEFAULT_PROPERTIES, EDITOR_TOOLS, describeCell, newEditorLayout, placeC
 describe('V2 editor course data', () => {
   it('creates independently valid drafts without shared mutable components', () => {
     const draft = newEditorLayout(), another = newEditorLayout();
+    expect(draft.timeLimit).toBe(150);
     expect(() => validateLayoutV2(draft)).not.toThrow();
     draft.items.push({ x: 8, y: 20 });
     draft.terrain[0].width = 30;
@@ -27,12 +28,13 @@ describe('V2 editor course data', () => {
   });
 
   it('preserves all supported block contents, power-ups and decorations through JSON round trips', () => {
-    for (const content of ['adaptive', 'coin', 'growth', 'fire', 'star', 'life'] as const) {
+    expect(placeComponent(newEditorLayout(),8,18,'hidden').blocks[0].content).toBe('coin');
+    for (const content of ['adaptive', 'coin', 'growth', 'fire', 'star'] as const) {
       const course = placeComponent(newEditorLayout(), 8, 18, 'glow', { ...DEFAULT_PROPERTIES, content });
       expect(() => validateLayoutV2(course)).not.toThrow();
       expect(selectionsAt(JSON.parse(JSON.stringify(course)), 8, 18)[0].properties.content).toBe(content);
     }
-    for (const powerup of ['growth', 'fire', 'star', 'life'] as const) {
+    for (const powerup of ['growth', 'fire', 'star'] as const) {
       const course = placeComponent(newEditorLayout(), 8, 18, 'powerup', { ...DEFAULT_PROPERTIES, powerup });
       expect(() => validateLayoutV2(course)).not.toThrow();
       expect(course.powerups[0].kind).toBe(powerup);

@@ -4,7 +4,7 @@ export type V2Tool = 'select' | 'terrain' | 'platform' | 'solid' | 'breakable' |
 export const EDITOR_TOOLS: { group: string; entries: readonly [V2Tool, string][] }[] = [
   { group: 'Edit', entries: [['select', 'Select / inspect'], ['erase', 'Erase']] },
   { group: 'World', entries: [['terrain', 'Terrain'], ['platform', 'Platform'], ['moving-platform', 'Moving platform'], ['obstacle', 'Solid obstacle'], ['decoration', 'Decoration']] },
-  { group: 'Blocks', entries: [['solid', 'Ordinary block'], ['breakable', 'Breakable block'], ['glow', 'Glowing power-up block'], ['hidden', 'Hidden life block']] },
+  { group: 'Blocks', entries: [['solid', 'Ordinary block'], ['breakable', 'Breakable block'], ['glow', 'Glowing power-up block'], ['hidden', 'Hidden coin block']] },
   { group: 'Encounters', entries: [['item', 'Coin'], ['powerup', 'Power-up'], ['enemy', 'Enemy'], ['hazard', 'Hazard']] },
   { group: 'Course', entries: [['start', 'Start'], ['checkpoint', 'Checkpoint'], ['finish', 'Finish']] },
 ];
@@ -24,7 +24,7 @@ const number = (value: number, min: number, max: number, label: string, integral
 const covers = (p: Component, x: number, y: number) => x >= p.x && x < p.x + (p.width ?? 1) && y >= p.y && y < p.y + (p.height ?? 1);
 
 export function newEditorLayout(): LayoutV2 {
-  return { version: 2, cols: 64, rows: 25, theme: 'overworld', timeLimit: 300, start: { x: 2, y: 22 }, finish: { x: 60, y: 22 }, finishHeight: 5,
+  return { version: 2, cols: 64, rows: 25, theme: 'overworld', timeLimit: 150, start: { x: 2, y: 22 }, finish: { x: 60, y: 22 }, finishHeight: 5,
     terrain: [{ x: 0, y: 23, width: 64 }, { x: 0, y: 24, width: 64 }], platforms: [], blocks: [], items: [], powerups: [], hazards: [], checkpoints: [], enemies: [], movingPlatforms: [], obstacles: [], decorations: [] };
 }
 
@@ -82,7 +82,7 @@ export function placeComponent(source: LayoutV2, x: number, y: number, tool: V2T
     case 'terrain': next.terrain.push({ x, y, width }); break;
     case 'platform': next.platforms.push({ x, y, width }); break;
     case 'solid': case 'breakable': case 'glow': case 'hidden':
-      next.blocks.push({ x, y, kind: tool, content: tool === 'glow' ? props.content : tool === 'hidden' ? 'life' : 'none' }); break;
+      next.blocks.push({ x, y, kind: tool, content: tool === 'glow' ? props.content : tool === 'hidden' ? 'coin' : 'none' }); break;
     case 'item': next.items.push({ x, y }); break;
     case 'powerup': next.powerups.push({ x, y, kind: props.powerup }); break;
     case 'hazard': next.hazards.push({ x, y, width, kind: props.hazard }); break;

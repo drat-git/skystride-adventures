@@ -11,9 +11,10 @@ const derive=promisify(scrypt), project=resolve(fileURLToPath(new URL('..',impor
 export const LOCAL_PUBLIC_KEY='skystride-local-development-public-key';
 const RPC={save_draft:['p_id','p_expected_revision','p_title','p_description','p_difficulty','p_layout'],owned_levels:[],own_progress:[],
  start_draft_playtest:['p_level_id','p_expected_revision'],complete_draft_playtest:['p_test_id','p_elapsed_ms','p_deaths'],
+ complete_run:['p_attempt_id','p_elapsed_ms','p_deaths','p_score','p_collected','p_total_items','p_small_only'],course_leaderboard:['p_level_id','p_mode'],
  publish_level:['p_level_id','p_expected_revision'],complete_attempt:['p_attempt_id','p_elapsed_ms','p_deaths'],level_leaderboard:['p_level_id'],level_statistics:[]};
 const TABLES=new Set(['profiles','levels','play_attempts','achievements','player_achievements','ratings','favorites','draft_playtests']);
-const COLUMNS=new Set(['id','display_name','created_at','title','description','difficulty','layout','creator_id','published','updated_at','user_id','level_id','code','name','rule','threshold_ms','achievement_code','earned_at','player_id','score','revision','official_order','started_at','completed_at','elapsed_ms','deaths']);
+const COLUMNS=new Set(['id','display_name','created_at','title','description','difficulty','layout','creator_id','published','updated_at','user_id','level_id','code','name','rule','threshold_ms','achievement_code','earned_at','player_id','score','revision','official_order','started_at','completed_at','elapsed_ms','deaths','collected','total_items','small_only']);
 const fail=(message,status=400,code='LOCAL_REQUEST')=>Object.assign(new Error(message),{status,code});
 const ident=value=>{if(!COLUMNS.has(value))throw fail('Unsupported local column');return '"'+value+'"';};
 const isLoopbackOrigin=value=>/^http:\/\/(127\.0\.0\.1|localhost):[0-9]{1,5}$/.test(value);
@@ -95,9 +96,9 @@ export async function createLocalBackend({dataDir,port=5187,faults={}}={}){
   if(path.startsWith('/rest/v1/rpc/')){
    if(!Object.hasOwn(RPC,resource)||method!=='POST')throw fail('Unsupported local RPC.',404);
    if(!data||Array.isArray(data)||typeof data!=='object'||Object.keys(data).some(key=>!RPC[resource].includes(key))||RPC[resource].some(key=>!Object.hasOwn(data,key)))throw fail('Invalid local RPC arguments.');
-   if(resource==='complete_attempt')fault('completion');if(resource==='complete_draft_playtest')fault('playtest');
+   if(resource==='complete_attempt'||resource==='complete_run')fault('completion');if(resource==='complete_draft_playtest')fault('playtest');
    const params=RPC[resource].map(key=>data[key]),args=params.map((_,i)=>'$'+(i+1)).join(',');
-   const table=['level_statistics','level_leaderboard','own_progress'].includes(resource);
+   const table=['level_statistics','level_leaderboard','course_leaderboard','own_progress'].includes(resource);
    const rows=(await db.query(table?`select * from public.${resource}(${args})`:`select public.${resource}(${args}) value`,params)).rows;
    if(resource==='save_draft')fault('draftResponse');
    return {body:table?rows:resource==='owned_levels'?rows.map(row=>row.value):rows[0]?.value??null};

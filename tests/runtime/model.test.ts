@@ -25,4 +25,27 @@ describe('source-derived runtime contract', () => {
     expect(run.attempt.elapsedMs).toBe(300);run.pause(false);expect(run.finish()).toBe(true);expect(run.finish()).toBe(false);
     run.tick(100);expect(run.attempt.elapsedMs).toBe(300);expect(run.die('late')).toBe(false);
   });
+  it('allows repeated checkpoint retries without a lives limit and restores the course countdown', () => {
+    const run=new RunModel(officialCourses[0].layout);run.checkpoint={x:10,y:22};
+    for(let i=0;i<8;i++) {
+      run.tick(1000);expect(run.die('Test retry')).toBe(true);expect(run.resume()).toBe(true);
+      expect(run.remainingMs).toBe(150000);expect(run.checkpoint).toEqual({x:10,y:22});
+    }
+    expect(run.result()).toMatchObject({deaths:8,elapsedMs:8000,smallOnly:true});
+    expect(run.state()).toEqual({status:'playing',hasCheckpoint:true});
+  });
+  it.each([['BIG',false],['FIRE',false],['SMALL',true]] as const)('remembers use of %s power with star=%s for the entire run', (power,star) => {
+    const run=new RunModel(officialCourses[0].layout);
+    expect(run.result().smallOnly).toBe(true);run.observePower(power,star);run.observePower('SMALL');
+    run.die('Test');run.resume();run.observePower('SMALL');run.finish();
+    expect(run.result().smallOnly).toBe(false);
+    expect(new RunModel(officialCourses[0].layout).result().smallOnly).toBe(true);
+  });
+  it('returns independent completion data including coins, score and small-only qualification', () => {
+    const layout=structuredClone(officialCourses[0].layout);layout.items=[{x:3,y:21}];layout.blocks=[{x:5,y:19,kind:'hidden',content:'coin'}];
+    const run=new RunModel(layout);run.collect('coin:3,21');run.collect('block:5,19');run.tick(14000);run.finish();
+    run.score+=7500;const completed=run.result();
+    expect(completed).toEqual({elapsedMs:14000,deaths:0,collected:2,totalItems:2,score:7700,smallOnly:true});
+    run.score+=100;expect(completed.score).toBe(7700);
+  });
 });

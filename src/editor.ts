@@ -51,9 +51,9 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
       <fieldset class="editor-properties"><legend id="property-heading">Component properties</legend>
         <div data-tools="terrain platform moving-platform obstacle hazard">${numeric('prop-width', 'Width (tiles)', 1, 1, 512)}</div>
         <div data-tools="obstacle">${numeric('prop-height', 'Height (tiles)', 3, 1, 25)}${choice('prop-obstacle', 'Obstacle appearance', ['column', 'rock', 'ruin'])}</div>
-        <div data-tools="glow">${choice('prop-content', 'Block contents', ['adaptive', 'coin', 'growth', 'fire', 'star', 'life'])}</div>
-        <p data-tools="hidden" class="small">Hidden blocks contain an extra life. They are revealed by a hit from below.</p>
-        <div data-tools="powerup">${choice('prop-powerup', 'Power-up type', ['growth', 'fire', 'star', 'life'])}</div>
+        <div data-tools="glow">${choice('prop-content', 'Block contents', ['adaptive', 'coin', 'growth', 'fire', 'star'])}</div>
+        <p data-tools="hidden" class="small">Hidden blocks contain a coin. They are revealed by a hit from below.</p>
+        <div data-tools="powerup">${choice('prop-powerup', 'Power-up type', ['growth', 'fire', 'star'])}</div>
         <div data-tools="hazard">${choice('prop-hazard', 'Hazard type', ['spike', 'lava'])}</div>
         <div data-tools="enemy">${choice('prop-enemy', 'Enemy type', ['walker', 'turtle', 'winged'])}${choice('prop-behavior', 'Enemy behavior', ['patrol', 'hop', 'horizontal', 'vertical'])}
           <label>Starting direction<select id="prop-direction"><option value="-1">Left</option><option value="1">Right</option></select></label>
@@ -410,7 +410,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
       },
       onHud: (hud: RunHud) => {
         if (!active || stamp !== generation) return;
-        el('#preview-hud').textContent = `${Math.ceil(hud.timeLeft)}s left · ${hud.lives} lives · ${hud.collected}/${hud.totalItems} coins · ${hud.score} points · ${hud.power}${hud.star ? ' · invincible' : ''}`;
+        el('#preview-hud').textContent = `Time elapsed ${(hud.elapsedMs / 1000).toFixed(1)} s · Time left ${Math.ceil(hud.timeLeft)} s · ${hud.collected}/${hud.totalItems} coins · ${hud.score} points · ${hud.power}${hud.star ? ' · invincible' : ''}`;
       },
     });
     preview.game.events.on('pause-changed', (value: boolean) => {

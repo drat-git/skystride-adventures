@@ -52,6 +52,7 @@ async function login(p, account) {
   await p.getByLabel('Password', { exact: true }).fill(accounts[account].password);
   await p.locator('#authform button[type=submit]').click();
   await message(p, 'Profile loaded.');
+  assert.equal(await p.getByLabel('Email',{exact:true}).inputValue(),accounts[account].email);
   const name = await p.locator('#profileform input[name=name]').inputValue();
   await p.locator('#brand').click(); return name;
 }
@@ -89,7 +90,7 @@ async function details(p) {
 }
 async function playShort(p) {
   await p.locator('#play-course').click(); await finish(p);
-  assert.match(await p.locator('#message').innerText(), /1\s*\/\s*1 items/);
+  assert.match(await p.locator('#message').innerText(), /1\s*\/\s*1 coins/);
   assert.match(await p.locator('#message').innerText(), /0 deaths/);
 }
 async function rate(p, value) {
@@ -110,9 +111,13 @@ try {
   await a.locator('#official').click(); await a.locator('#official-6').waitFor();
   assert.equal(await a.locator('.official-card').count(), 6);
   assert.equal(await a.locator('[id^=official-rank-]').count(), 6);
+  assert.equal(await a.locator('h1').innerText(),'Official Courses');
+  assert.equal(await a.locator('.page-heading .eyebrow').count(),0);
   await shot(a, '02-official-courses');
   await a.locator('#official-1').click(); await a.locator('#game canvas').waitFor();
-  await a.waitForTimeout(250); await a.locator('#game').focus();
+  await a.waitForTimeout(250); assert.equal(await a.locator('#hud-lives').count(),0);
+  assert.match(await a.locator('#run-hud').innerText(),/remaining of 150 s/);
+  await a.locator('#game').focus();
   await a.keyboard.down('ArrowRight'); await a.waitForTimeout(350); await a.keyboard.down('Space');
   await a.waitForTimeout(180); await a.keyboard.up('Space'); await a.keyboard.up('ArrowRight');
   await shot(a, '03-official-keyboard'); await a.keyboard.press('Escape'); await a.locator('#resume-run').waitFor();
@@ -156,6 +161,13 @@ try {
   await playShort(b); await shot(b, '06-community-completion'); await b.locator('#details').click(); await message(b, 'Course details loaded.');
   await rate(b, 3); await favorite(b); await checkStats(b, '3.0', 1, 1);
   await b.locator('#leaderboard').click(); await b.getByRole('cell', { name: nameB, exact: true }).waitFor();
+  await b.locator('#leaderboard-mode').selectOption('score');
+  await b.getByRole('cell',{name:nameB,exact:true}).waitFor();
+  assert.equal(await b.locator('.ranking th').last().innerText(),'Highest score');
+  assert.ok(Number(await b.locator('.ranking tbody td').last().innerText())>0);
+  await shot(b, '07-score-leaderboard');
+  await b.locator('#leaderboard-mode').selectOption('time');
+  await b.getByRole('cell',{name:nameB,exact:true}).waitFor();
   await shot(b, '07-leaderboard'); await b.locator('#brand').click(); await b.locator('#awards').click();
   await b.locator('#awards article').filter({ has: b.getByRole('heading', { name: 'First finish', exact: true }) }).locator('.badge').filter({ hasText: 'EARNED' }).waitFor();
   record('Account B cannot see A private creator records; it discovers and completes the published V2 with checkpoint/coin through actual keys, then saves rating/favorite, ranking and completion achievement');
@@ -177,7 +189,8 @@ try {
   await details(b); assert.equal(await b.locator('#rating-score').inputValue(), '');
   assert.equal(await b.locator('#favorite-toggle').innerText(), 'Favorite'); await checkStats(b, '5.0', 1, 1);
   await b.locator('#brand').click(); await b.locator('#progress').click(); await message(b, 'Best times are saved to your account.');
-  assert.equal(await b.locator('.progress-list li').count(), 6); await shot(b, '08-progress');
+  assert.equal(await b.locator('.progress-list li').count(), 7);
+  assert.match(await b.locator('.progress-list li').filter({hasText:title}).innerText(),/Fastest completion:/); await shot(b, '08-progress');
   record('Session reload, My Favorites, deterministic rating sort, rating replacement/removal, unfavorite and logout/login persistence pass; hosted own_progress loads');
   assert.deepEqual(browserErrors, []); assert.deepEqual(httpFailures, []); passed = true;
 } catch (error) {

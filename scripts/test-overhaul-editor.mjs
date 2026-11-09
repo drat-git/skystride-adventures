@@ -113,7 +113,7 @@ try {
   await page.locator('#tile-tool').selectOption('select'); await page.locator('#editor-viewport').press('Enter');
   assert.equal(await page.locator('#prop-content').inputValue(), 'fire');
   await page.locator('#prop-content').selectOption('star'); await page.locator('#apply-component').click();
-  await page.locator('#tile-tool').selectOption('powerup'); await page.locator('#prop-powerup').selectOption('life'); await go(11, 20); await page.locator('#editor-viewport').press('Enter');
+  await page.locator('#tile-tool').selectOption('powerup'); await page.locator('#prop-powerup').selectOption('growth'); await go(11, 20); await page.locator('#editor-viewport').press('Enter');
   await page.locator('#tile-tool').selectOption('enemy'); await page.locator('#prop-enemy').selectOption('winged');
   await page.locator('#prop-behavior').selectOption('horizontal'); await set('#prop-speed', 60); await set('#prop-range', 8); await go(14, 17); await page.locator('#editor-viewport').press('Enter');
   await page.locator('#tile-tool').selectOption('moving-platform'); await set('#prop-width', 3); await page.locator('#prop-axis').selectOption('y'); await set('#prop-distance', 4); await set('#prop-durationMs', 5000); await go(20, 15); await page.locator('#editor-viewport').press('Enter');

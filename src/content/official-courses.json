@@ -10,7 +10,7 @@
       "cols": 138,
       "rows": 25,
       "theme": "overworld",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 3,
         "y": 22
@@ -124,7 +124,7 @@
           "x": 132,
           "y": 18,
           "kind": "hidden",
-          "content": "life"
+          "content": "coin"
         },
         {
           "x": 16,
@@ -466,7 +466,7 @@
       "cols": 142,
       "rows": 25,
       "theme": "overworld",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 1,
         "y": 22
@@ -912,7 +912,7 @@
       "cols": 98,
       "rows": 25,
       "theme": "cave",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 3,
         "y": 22
@@ -1228,7 +1228,7 @@
       "cols": 102,
       "rows": 25,
       "theme": "cave",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 3,
         "y": 22
@@ -1504,7 +1504,7 @@
       "cols": 140,
       "rows": 25,
       "theme": "sky",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 2,
         "y": 22
@@ -1991,7 +1991,7 @@
       "cols": 140,
       "rows": 25,
       "theme": "sky",
-      "timeLimit": 300,
+      "timeLimit": 150,
       "start": {
         "x": 3,
         "y": 16
@@ -2415,7 +2415,7 @@
           "x": 14,
           "y": 20,
           "kind": "glow",
-          "content": "life"
+          "content": "coin"
         },
         {
           "x": 15,

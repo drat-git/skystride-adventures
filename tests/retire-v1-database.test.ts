@@ -46,7 +46,8 @@ beforeAll(async () => {
  await db.query('insert into auth.sessions values($1,$1,$2);', [A, 'session sentinel']);
  await db.query('insert into auth.identities values($1,$1,$2);', [A, 'identity sentinel']);
  await db.query('insert into levels(id,creator_id,title,difficulty,layout,published) values($1,null,$2,$3,$4,true),($5,$6,$7,$3,$4,false)', [OLD, 'Archived published', 'easy', layout, OLD_DRAFT, A, 'Archived private']);
- await db.query('insert into levels(id,creator_id,title,difficulty,layout,published) values($1,$2,$3,$4,$5,false),($6,$7,$8,$4,$5,true)', [DRAFT, A, 'Retained private V2', 'easy', courses[0].layout, COMMUNITY, B, 'Retained community V2']);
+ const historicalV2=(await db.query<{layout:unknown}>('select layout from levels where id=$1',[courses[0].id])).rows[0].layout;
+ await db.query('insert into levels(id,creator_id,title,difficulty,layout,published) values($1,$2,$3,$4,$5,false),($6,$7,$8,$4,$5,true)', [DRAFT, A, 'Retained private V2', 'easy', historicalV2, COMMUNITY, B, 'Retained community V2']);
  await role('authenticated', A);
  for (const level of [OLD, COMMUNITY]) {
   const run = await attempt(A, level); await db.query('select complete_attempt($1,100,2)', [run]);

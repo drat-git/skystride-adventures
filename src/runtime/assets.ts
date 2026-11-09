@@ -13,7 +13,7 @@ function canvas(scene: Phaser.Scene, key: string, width: number, height: number,
   const texture = scene.textures.createCanvas(key, width, height)!;
   draw(texture.context); texture.refresh();
 }
-function copyFrame(scene: Phaser.Scene, key: string, frame: number, swap?: 'fire' | 'star' | 'life') {
+function copyFrame(scene: Phaser.Scene, key: string, frame: number, swap?: 'fire' | 'star') {
   canvas(scene, key, 18, 18, ctx => {
     const f = scene.textures.getFrame('tiles', frame);
     ctx.drawImage(f.source.image as HTMLImageElement, f.cutX, f.cutY, 18, 18, 0, 0, 18, 18);
@@ -21,7 +21,6 @@ function copyFrame(scene: Phaser.Scene, key: string, frame: number, swap?: 'fire
       const image = ctx.getImageData(0, 0, 18, 18), d = image.data;
       for (let i = 0; i < d.length; i += 4) {
         if (swap === 'fire') [d[i], d[i + 2]] = [d[i + 2], d[i]];
-        if (swap === 'life') [d[i], d[i + 1]] = [d[i + 1], d[i]];
         if (swap === 'star') d[i] = d[i + 1] = d[i + 2] = Math.min(255, Math.max(d[i], d[i + 1], d[i + 2]) * 1.15);
       }
       ctx.putImageData(image, 0, 0);
@@ -30,7 +29,7 @@ function copyFrame(scene: Phaser.Scene, key: string, frame: number, swap?: 'fire
 }
 
 export function createAssets(scene: Phaser.Scene) {
-  copyFrame(scene, 'gem-fire', 67, 'fire'); copyFrame(scene, 'gem-star', 67, 'star'); copyFrame(scene, 'mushroom-life', 128, 'life');
+  copyFrame(scene, 'gem-fire', 67, 'fire'); copyFrame(scene, 'gem-star', 67, 'star');
   canvas(scene, 'hills', 96, 24, ctx => {
     for (let i = 0; i < 4; i++) {
       const f = scene.textures.getFrame('bg', 8 + i);

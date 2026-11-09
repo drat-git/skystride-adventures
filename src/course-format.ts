@@ -4,8 +4,8 @@ export type Point = { x: number; y: number };
 export type Platform = Point & { width: number };
 export type Theme = 'overworld' | 'cave' | 'sky';
 export type BlockKind = 'solid' | 'breakable' | 'glow' | 'hidden';
-export type BlockContent = 'none' | 'coin' | 'adaptive' | 'growth' | 'fire' | 'star' | 'life';
-export type PowerupKind = 'growth' | 'fire' | 'star' | 'life';
+export type BlockContent = 'none' | 'coin' | 'adaptive' | 'growth' | 'fire' | 'star';
+export type PowerupKind = 'growth' | 'fire' | 'star';
 export type Block = Point & { kind: BlockKind; content: BlockContent };
 export type Powerup = Point & { kind: PowerupKind };
 export type Hazard = Platform & { kind: 'spike' | 'lava' };
@@ -67,10 +67,10 @@ export function validateLayoutV2(value: unknown): asserts value is LayoutV2 {
       if (positions.has(identity)) fail(`duplicate ${name} position.`); positions.add(identity);
       if (['terrain', 'platforms', 'hazards', 'movingPlatforms', 'obstacles'].includes(name) && !integer(p.width, 1, cols - p.x)) fail(`${name} width is outside the world.`);
       if (name === 'blocks' && (!member(p.kind, ['solid', 'breakable', 'glow', 'hidden']) ||
-          !member(p.content, ['none', 'coin', 'adaptive', 'growth', 'fire', 'star', 'life']) ||
+          !member(p.content, ['none', 'coin', 'adaptive', 'growth', 'fire', 'star']) ||
           ((p.kind === 'solid' || p.kind === 'breakable') && p.content !== 'none') ||
-          (p.kind === 'glow' && p.content === 'none') || (p.kind === 'hidden' && p.content !== 'life'))) fail('invalid block contents.');
-      if (name === 'powerups' && !member(p.kind, ['growth', 'fire', 'star', 'life'])) fail('unsupported power-up.');
+          (p.kind === 'glow' && p.content === 'none') || (p.kind === 'hidden' && p.content !== 'coin'))) fail('invalid block contents.');
+      if (name === 'powerups' && !member(p.kind, ['growth', 'fire', 'star'])) fail('unsupported power-up.');
       if (name === 'hazards' && !member(p.kind, ['spike', 'lava'])) fail('unsupported hazard.');
       if (name === 'enemies' && (!member(p.kind, ['walker', 'turtle', 'winged']) || !member(p.direction, [-1, 1]) || !finite(p.speed, 10, 120) || !integer(p.range, 1, 16) ||
           (p.kind === 'winged' ? !member(p.behavior, ['hop', 'horizontal', 'vertical']) : p.behavior !== 'patrol'))) fail('unsupported enemy behavior.');
