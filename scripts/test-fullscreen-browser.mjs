@@ -3,6 +3,7 @@
 import { createServer } from 'vite';
 import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { driveGroundCourse } from './test-overhaul-official-ground.mjs';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const output = 'output/fullscreen';
@@ -77,6 +78,49 @@ try {
   await page.locator('#exit-fullscreen').click(); await windowed();
   await page.waitForFunction(() => document.activeElement?.id === 'game');
   record('Entering while paused retains the overlay; navigation exits cleanly and repeated runs keep one canvas');
+
+  await page.locator('#fullscreen').click(); await fullscreen();
+  const originalStage = await page.locator('#play-stage').elementHandle();
+  const sameStage = async () => {
+    await fullscreen();
+    assert.equal(await originalStage.evaluate(el => el === document.fullscreenElement), true);
+    await ready(); assert.equal(await page.locator('canvas').count(), 1);
+    await page.waitForFunction(() => document.activeElement?.id === 'game');
+    assert.ok((await geometry()).allGame);
+  };
+  await page.evaluate(() => { window.fullscreenExits = 0; document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) window.fullscreenExits++; }); });
+  for (let i = 0; i < 2; i++) {
+    await page.locator('#fullscreen-pause').click(); await page.locator('#replay').click(); await sameStage();
+    assert.equal(await page.evaluate(() => window.__SKYSTRIDE_SNAPSHOT__().attempt.collected), 0);
+  }
+  await page.keyboard.down('ArrowRight');
+  try { await page.locator('#respawn').waitFor({ timeout: 12000 }); }
+  finally { await page.keyboard.up('ArrowRight'); }
+  await page.locator('#replay').click(); await sameStage();
+  assert.equal(await page.evaluate(() => window.fullscreenExits), 0);
+  record('Restart from pause or death preserves the same native fullscreen element and resets the run');
+
+  const complete = async () => {
+    const result = await driveGroundCourse(page, 0, {
+      snapshot: () => page.evaluate(() => window.__SKYSTRIDE_SNAPSHOT__()),
+      onDeath: async () => { await page.locator('#respawn').click(); await page.waitForFunction(() => window.__SKYSTRIDE_SNAPSHOT__().state.status === 'playing'); },
+    });
+    assert.equal(result.status, 'complete'); await page.locator('#next-level').waitFor();
+    assert.equal(await originalStage.evaluate(el => el === document.fullscreenElement), true);
+  };
+  await complete(); await page.locator('#replay').click(); await sameStage();
+  await complete(); await page.screenshot({ path: output + '/completed-fullscreen.png' });
+  await page.locator('#next-level').click(); await sameStage();
+  assert.equal(await page.locator('h1').innerText(), 'Over the Hills');
+  assert.equal(await page.evaluate(() => window.__SKYSTRIDE_SNAPSHOT__().attempt.collected), 0);
+  assert.equal(await page.evaluate(() => window.fullscreenExits), 0);
+  await page.screenshot({ path: output + '/next-level-fullscreen.png' });
+  record('Actual course completion, Replay and Next level retain uninterrupted fullscreen with a fresh playable course');
+  await page.locator('#fullscreen-pause').click(); await page.locator('#overlay-menu').click(); await windowed();
+  await page.locator('#official').click(); await page.locator('#official-2').click(); await ready();
+  assert.equal(await page.evaluate(() => document.fullscreenElement), null);
+  assert.equal(await page.locator('#fullscreen-pause').isVisible(), false);
+  record('Returning to the main menu exits fullscreen; starting another course from menus stays windowed');
   assert.deepEqual(errors, []); passed = true;
 } catch (error) {
   await page?.screenshot({ path: output + '/failure.png' }).catch(() => {});

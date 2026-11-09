@@ -43,15 +43,35 @@ function clearScreen() {
   currentGame?.destroy(); currentGame = null;
   editorController?.destroy(); editorController = undefined;
 }
+// Keep the fullscreen element and its ancestors connected during course changes.
+// Removing or moving that element would make the browser leave fullscreen.
+function replaceAround(parent: HTMLElement, next: ParentNode, keep: Element, placeholder: Element) {
+  for (const child of [...parent.childNodes]) if (child !== keep) child.remove();
+  let after = false;
+  for (const child of [...next.childNodes]) {
+    if (child === placeholder) after = true;
+    else if (after) parent.append(child);
+    else parent.insertBefore(child, keep);
+  }
+}
 function shell(title: string, body: string) {
+  const stage = screen === 'play' && document.fullscreenElement?.id === 'play-stage' ? document.fullscreenElement : null;
   clearScreen();
   root.className = `screen-${screen}`;
-  root.innerHTML = `<header class="game-header"><a href="#" id="brand" class="brand"><span class="player-icon" aria-hidden="true"></span><span>SKYSTRIDE<small>ADVENTURES</small></span></a><nav aria-label="Main navigation">${screen === 'home' ? '' : button('menu', 'Main menu', true)}<div class="account">${session ? `${button('account', 'My account', true)}${button('signout', 'Sign out', true)}` : button('signin', 'Sign in', true)}</div></nav></header>
+  const markup = `<header class="game-header"><a href="#" id="brand" class="brand"><span class="player-icon" aria-hidden="true"></span><span>SKYSTRIDE<small>ADVENTURES</small></span></a><nav aria-label="Main navigation">${screen === 'home' ? '' : button('menu', 'Main menu', true)}<div class="account">${session ? `${button('account', 'My account', true)}${button('signout', 'Sign out', true)}` : button('signin', 'Sign in', true)}</div></nav></header>
     <div id="account-status" class="message error global-status" role="alert" ${accountStatusError ? '' : 'hidden'}>${escape(accountStatusError)}</div>
     <main><div class="page-heading"><h1 tabindex="-1">${title}</h1></div>${body}</main>
     <footer>${localBackend ? '<span>LOCAL DEVELOPMENT · Separate test accounts and database</span>' : ''}${button('credits', 'Credits', true)}</footer>`;
+  if (stage) {
+    const template = document.createElement('template'); template.innerHTML = markup;
+    const main = stage.parentElement!, nextMain = template.content.querySelector('main')!;
+    const nextStage = nextMain.querySelector('#play-stage')!;
+    stage.replaceChildren(...nextStage.childNodes);
+    replaceAround(main, nextMain, stage, nextStage);
+    replaceAround(root, template.content, main, nextMain);
+  } else root.innerHTML = markup;
   onNavigate('brand', home); onNavigate('menu', home); onNavigate('signin', () => auth(false)); onNavigate('account', profile); on('signout', signout); onNavigate('credits', credits);
-  document.querySelector<HTMLElement>('h1')?.focus({preventScroll:true});
+  if (!stage) document.querySelector<HTMLElement>('h1')?.focus({preventScroll:true});
 }
 function title() {
   screen = 'title'; clearScreen(); root.className = 'screen-title';
