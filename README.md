@@ -56,7 +56,7 @@ npm run test:production
 npm run test:title
 ```
 
-The opt-in real hosted journey is `node --env-file=.env.local scripts/test-overhaul-hosted.mjs`, using dedicated `TEST_EMAIL_A` / `TEST_PASSWORD_A` and `TEST_EMAIL_B` / `TEST_PASSWORD_B` credentials. It creates a clearly named published verification course and private copy, then exercises actual account interactions; it is not part of `npm test`.
+The opt-in real hosted journey is `node --env-file=.env.local scripts/test-overhaul-hosted.mjs`, using dedicated `TEST_EMAIL_A` / `TEST_PASSWORD_A` and `TEST_EMAIL_B` / `TEST_PASSWORD_B` credentials. Recreate dedicated test accounts and these private environment variables before rerunning it: the previous accounts and credentials were removed in the account reset. It creates a clearly named published verification course and private copy, then exercises actual account interactions; it is not part of `npm test`.
 
 Browser scripts need Playwright and Chromium. An existing module/executable can be supplied with `PLAYWRIGHT_MODULE` and `CHROME_PATH`; no browser dependency is bundled with the game. The main browser suite launches its own ephemeral local SQL/API fixture and Vite server. Runtime/editor scripts document their local fixture setup in their headers.
 
@@ -68,9 +68,11 @@ The tests retain the original domain/database checks and add V1/V2 geometry pari
 
 The original eight tables and existing RPC contracts remain. V2 expands the bounded `levels.layout` JSON, adds server-owned official ordering, and aggregates account progress from completed attempts. The three initial V2 migrations added format support, official records and a rendering limit. A fourth, transactional retirement migration now removes V1 courses and their dependent records, drops V1 validation and retargets the timed achievement. Accounts, earned awards and V2 data were verified unchanged across retirement.
 
-Before deploying to the current Supabase project, inspect hosted history and apply only missing migrations. Do not rerun core creation scripts or overwrite existing records. Verify managed Auth/PostgREST, permissions, save/reload, publication, two-account community behavior, and new registration/confirmation on the hosted build. Completion remains client-reported within this class project's trust model; publication tests are not production anti-cheat.
+Before deploying to the current Supabase project, inspect hosted history and apply only missing migrations. Do not rerun core creation scripts or overwrite existing records. Verify managed Auth/PostgREST, permissions, save/reload, publication, two-account community behavior, and new registration with an immediate authenticated session on the hosted build. Email verification is disabled. Completion remains client-reported within this class project's trust model; publication tests are not production anti-cheat.
 
-[The overhaul notes](docs/OVERHAUL.md) record the completed V1 retirement and local recovery archive. Historical migration files and migration-test fixtures remain solely to reproduce and verify upgrades; the running application and current database have no V1 course support. Existing rankings were not reassigned to different course layouts.
+[The overhaul notes](docs/OVERHAUL.md) record the completed V1 retirement and subsequent account reset. Historical migration files and migration-test fixtures remain solely to reproduce and verify upgrades; the running application and current database have no V1 course support. The raw account recovery archives were deleted during the reset.
+
+On 9 November 2026, the user requested a complete account reset and removal of email verification. All hosted accounts and their courses, progress, interactions, awards and sessions were deleted; local preview account data and stored account recovery copies were also removed. The six built-in V2 courses and three achievement definitions were preserved. A temporary real registration verified immediate sign-in, profile creation and subsequent login, then was deleted. New players must create a fresh account; no confirmation email is required.
 
 ## Sources and evidence
 

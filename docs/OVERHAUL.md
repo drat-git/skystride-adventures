@@ -14,7 +14,7 @@ Feature inventory and new entry points:
 
 | Existing capability | V2 entry point |
 | --- | --- |
-| Registration, email confirmation, session restoration, sign out | Header Sign in / My account; main-menu Create account |
+| Registration without email verification, session restoration, sign out | Header Sign in / My account; main-menu Create account |
 | Display-name editing | My account / Player profile |
 | Published courses and guest runs | Play adventure / Community courses |
 | Attempt completion and saved best times | Course completion; My progress |
@@ -28,7 +28,7 @@ Feature inventory and new entry points:
 | Checkpoints, optional collectibles, pause, restart | Shared course runtime |
 | Reduced decorative motion | Settings |
 | Disabled AI hint and feedback placeholders | Play controls / Workshop |
-| V1 course compatibility | Retired by explicit user request after V2 release; accounts, V2 records and earned awards retained |
+| V1 course compatibility | Retired by explicit user request after V2 release; the later account reset is recorded below |
 
 ## Reference fidelity and course provenance
 
@@ -51,21 +51,27 @@ DS reference map, inspected directly: <https://www.mariouniverse.com/wp-content/
 
 ## Data and isolation
 
-The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. The subsequent user-authorized retirement removed V1 course-owned records while preserving accounts, earned awards and all V2 records; see the retirement evidence below. The existing `.env.local` is preserved; local development overrides its URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
+The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. The subsequent user-authorized retirement removed V1 course-owned records while preserving accounts, earned awards and all V2 records at that stage; a later explicit account reset removed user-owned data as recorded below. The public backend configuration in `.env.local` remains; obsolete test-account credentials were removed. Local development overrides the URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
 
 The existing eight tables remain. V2 expands the declarative `levels.layout` JSON, replaces the fixed-V1 validation constraints with a V1/V2 dispatcher, and adds server-owned `official_order`. Existing save, playtest, publication, community, and completion contracts remain. Progress is aggregated from existing completed attempts; no duplicate progress table is introduced.
 
-Local testing runs the real Postgres schema, functions, triggers, constraints, and row-level policies in PGlite. The local HTTP/Auth adapter is a development fixture, not the hosted Supabase Auth/PostgREST service. It sends no emails and uses separate local credentials. Hosted email confirmation and API behavior must be rechecked during cutover.
+Local testing runs the real Postgres schema, functions, triggers, constraints, and row-level policies in PGlite. The local HTTP/Auth adapter is a development fixture, not the hosted Supabase Auth/PostgREST service. It sends no emails and uses separate local credentials. Hosted registration also requires no email verification; an immediate authenticated session and managed API behavior must be verified separately from the local fixture.
 
 ## Later cutover and V1 retirement
 
 The user explicitly authorized full V1 removal after the verified V2 rollout. Migration `20261109072050_retire_v1_courses.sql` deletes only levels with `layout.version = 1` and their cascading attempts, playtests, ratings and favorites. It rejects V1 layouts, drops the V1 validator and moves the timed achievement to the existing Meadow Run V2 UUID with its 30,000ms catalog threshold. The stable award key remains to preserve previously earned rows and timestamps.
 
-Before deletion, a refreshed recovery archive captured 5 V1 levels, 13 attempts, 5 draft playtests, 3 ratings, 3 favorites and the old timed-achievement catalog row at `output/overhaul/v1-retirement/hosted-v1-recovery.json` (ignored, mode0600). Pre/post checksums proved the 7 auth users, 7 identities, 11 sessions, 7 profiles, 7 earned awards, 8 existing V2 levels and all V2-owned records unchanged. The persistent local database also has a separate recovery copy before its migration.
+Before V1 deletion, recovery copies captured the retired records and local database. Pre/post checksums proved the 7 auth users, 7 identities, 11 sessions, 7 profiles, 7 earned awards, 8 existing V2 levels and all V2-owned records unchanged at that time. The raw recovery copies and older database snapshots were subsequently deleted as part of the requested account reset; retained preservation evidence contains counts and checksums rather than account records.
 
 The active app no longer contains a V1 layout, validator, renderer, practice menu or editor conversion. Obsolete V1 seed and browser/API scripts are removed. Current seed startup cannot recreate V1. Historical immutable migrations and isolated migration-test fixtures remain to reproduce safe upgrades; existing report files remain outside this game phase.
 
-Restoration, if ever requested, requires reinstating the historical validation/function definitions before importing the archived records in dependency order, and deploying the matching compatibility frontend. No old course UUID is reused for a new layout. Git history and the local recovery archive preserve that option without keeping V1 live.
+No old course UUID is reused for a new layout. Git history preserves historical implementation code, but the deleted account recovery files are no longer available for restoring user records.
+
+## Account reset — 9 November 2026
+
+At the user's request, hosted email verification was disabled and all seven existing accounts and their data were erased, including four user-created V2 courses, profiles, attempts, saved playtests, ratings, favorites, earned awards and authentication sessions. A temporary real account verified immediate registration, profile creation and password login, then was also deleted. Final checks found zero users or user-owned application records; checksums confirmed the six built-in V2 courses and three achievement definitions were unchanged.
+
+The local preview's account database, stored raw account recovery copies and obsolete test credentials were removed as well. New players must register again, without an email confirmation step. Before running the opt-in hosted acceptance script, create new dedicated test accounts and set `TEST_EMAIL_A`, `TEST_PASSWORD_A`, `TEST_EMAIL_B` and `TEST_PASSWORD_B` privately in `.env.local`. Historical verification results describe the earlier runs, not surviving accounts or records.
 
 ## Verification
 
