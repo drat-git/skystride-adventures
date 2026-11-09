@@ -237,6 +237,16 @@ footer button {
   padding:6px 9px;
   font-weight:700
 }
+.badge.achievement-locked {
+  background:#533640;
+  color:#dfa1a7;
+  border-color:#80505b
+}
+.badge.achievement-earned {
+  background:#4aef80;
+  color:#10351e;
+  border-color:#8effb0
+}
 [hidden] {
   display:none!important
 }
