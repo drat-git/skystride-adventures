@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
-import { validateLayout, practiceLevel, parseLevel } from '../src/level';
+import { validateLayout, parseLevel } from '../src/level';
+import { historicalCourse, seedHistoricalV1 } from './fixtures/historical-v1';
 import { validateLayoutV2, type LayoutV2 } from '../src/course-format';
 import officialCourses from '../src/content/official-courses.json';
 
@@ -28,12 +29,12 @@ let legacySnapshot:unknown;
 beforeAll(async()=>{
  await db.exec(auth);for(const name of migrations.slice(0,-1))await db.exec(read(name));
  await db.query('insert into auth.users values($1,$2),($3,$4)',[A,{display_name:'Format A'},B,{display_name:'Format B'}]);
- await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ await seedHistoricalV1(db);
  await role('authenticated',A);
- const run=(await db.query<{id:string}>('insert into play_attempts(user_id,level_id) values($1,$2) returning id',[A,practiceLevel.id])).rows[0].id;
+ const run=(await db.query<{id:string}>('insert into play_attempts(user_id,level_id) values($1,$2) returning id',[A,historicalCourse.id])).rows[0].id;
  await db.query('select complete_attempt($1,100,0)',[run]);
- await db.query('insert into ratings(user_id,level_id,score) values($1,$2,5)',[A,practiceLevel.id]);
- await db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,practiceLevel.id]);
+ await db.query('insert into ratings(user_id,level_id,score) values($1,$2,5)',[A,historicalCourse.id]);
+ await db.query('insert into favorites(user_id,level_id) values($1,$2)',[A,historicalCourse.id]);
  await db.exec('reset role');
  legacySnapshot=(await db.query(`select jsonb_build_object('profiles',(select jsonb_agg(p order by id) from profiles p),'levels',(select jsonb_agg(l order by id) from levels l),'attempts',(select jsonb_agg(a order by id) from play_attempts a),'ratings',(select jsonb_agg(r) from ratings r),'favorites',(select jsonb_agg(f) from favorites f),'awards',(select jsonb_agg(a order by achievement_code) from player_achievements a)) state`)).rows[0];
  await db.exec(read(migrations.at(-1)!));
@@ -41,12 +42,12 @@ beforeAll(async()=>{
 afterAll(()=>db.close());
 it('preserves existing records and v1 validation through the additive upgrade',async()=>{
  const after=(await db.query(`select jsonb_build_object('profiles',(select jsonb_agg(p order by id) from profiles p),'levels',(select jsonb_agg(to_jsonb(l)-'official_order' order by id) from levels l),'attempts',(select jsonb_agg(a order by id) from play_attempts a),'ratings',(select jsonb_agg(r) from ratings r),'favorites',(select jsonb_agg(f) from favorites f),'awards',(select jsonb_agg(a order by achievement_code) from player_achievements a)) state`)).rows[0];
- expect(after).toEqual(legacySnapshot);expect(await valid(practiceLevel.layout)).toBe(true);expect(()=>validateLayout(practiceLevel.layout)).not.toThrow();
- expect(await valid({...practiceLevel.layout,items:[{x:1,y:12}]})).toBe(false);
+ expect(after).toEqual(legacySnapshot);expect(await valid(historicalCourse.layout)).toBe(true);expect(()=>validateLayout(historicalCourse.layout)).toThrow(); // Current application rejects retired layouts; this DB is pinned before retirement.
+ expect(await valid({...historicalCourse.layout,items:[{x:1,y:12}]})).toBe(false);
 });
 it('installs the entire additive chain on a fresh database',async()=>{
  const fresh=new PGlite();try{await fresh.exec(auth);for(const name of migrations)await fresh.exec(read(name));
- await fresh.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ await seedHistoricalV1(fresh);
  expect((await fresh.query('select official_order,revision from levels')).rows).toEqual([{official_order:null,revision:1}]);
  }finally{await fresh.close();}
 },30000);
@@ -104,8 +105,8 @@ it('keeps official order server-owned and validates official record parsing',asy
  await db.exec('reset role');await db.query('update levels set official_order=1 where id=$1',[V2]);
  await expect(db.query('update levels set official_order=1 where id=$1',[COPY])).rejects.toThrow();
  await expect(db.query('update levels set official_order=7 where id=$1',[COPY])).rejects.toThrow();
- expect(parseLevel({...practiceLevel,layout:sample(),official_order:1}).officialOrder).toBe(1);
- expect(()=>parseLevel({...practiceLevel,official_order:7})).toThrow();
+ expect(parseLevel({...historicalCourse,layout:sample(),official_order:1}).officialOrder).toBe(1);
+ expect(()=>parseLevel({...historicalCourse,layout:sample(),official_order:7})).toThrow();
 });
 it('keeps v2 private data and progress isolated, with normal publication interaction eligibility',async()=>{
  await role('authenticated',B);
@@ -117,7 +118,7 @@ it('keeps v2 private data and progress isolated, with normal publication interac
  await db.query('select complete_attempt($1,200,0)',[run]);
  await db.query('insert into ratings(user_id,level_id,score) values($1,$2,4)',[B,V2]);await db.query('insert into favorites(user_id,level_id) values($1,$2)',[B,V2]);
  expect((await db.query('select * from own_progress()')).rows).toEqual([{level_id:V2,best_ms:200}]);
- await role('authenticated',A);expect((await db.query('select * from own_progress()')).rows).toEqual([{level_id:practiceLevel.id,best_ms:100}]);
+ await role('authenticated',A);expect((await db.query('select * from own_progress()')).rows).toEqual([{level_id:historicalCourse.id,best_ms:100}]);
  await role('anon');await expect(db.query('select * from own_progress()')).rejects.toThrow();
  expect((await db.query('select * from level_statistics() where level_id=$1',[V2])).rows[0]).toMatchObject({rating_count:1,favorite_count:1});
 });
@@ -126,7 +127,7 @@ it('seeds six immutable official courses matching the client manifest without re
  const seed=read('20261109060418_overhaul_official_courses.sql');await db.exec(seed);
  const rows=(await db.query('select id,title,description,difficulty,layout,official_order from levels where official_order is not null order by official_order')).rows;
  expect(rows).toEqual(officialCourses.map(({officialOrder,...course})=>({...course,official_order:officialOrder})));
- const existing=(await db.query('select layout from levels where id=$1',[practiceLevel.id])).rows[0];expect(existing).toEqual({layout:practiceLevel.layout});
+ const existing=(await db.query('select layout from levels where id=$1',[historicalCourse.id])).rows[0];expect(existing).toEqual({layout:historicalCourse.layout});
  await db.exec(seed);expect((await db.query('select count(*)::int count from levels where official_order is not null')).rows[0]).toEqual({count:6});
  await role('authenticated',B);expect((await db.query('select id from levels where official_order is not null')).rows).toHaveLength(6);
  await expect(db.query("update levels set official_order=6 where id=$1",[COPY])).rejects.toThrow();
@@ -134,7 +135,7 @@ it('seeds six immutable official courses matching the client manifest without re
 it('aggregates full progress history beyond the Data API row cap without exposing another account',async()=>{
  await db.exec('reset role');
  await db.query(`insert into play_attempts(user_id,level_id,started_at,completed_at,elapsed_ms,deaths)
- select $1::uuid,$2::uuid,now()-interval '1 minute',now(),case when i=1001 then 1 else 900 end,0 from generate_series(1,1001) i`,[B,practiceLevel.id]);
- await role('authenticated',B);expect((await db.query('select * from own_progress() where level_id=$1',[practiceLevel.id])).rows).toEqual([{level_id:practiceLevel.id,best_ms:1}]);
- await role('authenticated',A);expect((await db.query('select * from own_progress()')).rows).toEqual([{level_id:practiceLevel.id,best_ms:100}]);
+ select $1::uuid,$2::uuid,now()-interval '1 minute',now(),case when i=1001 then 1 else 900 end,0 from generate_series(1,1001) i`,[B,historicalCourse.id]);
+ await role('authenticated',B);expect((await db.query('select * from own_progress() where level_id=$1',[historicalCourse.id])).rows).toEqual([{level_id:historicalCourse.id,best_ms:1}]);
+ await role('authenticated',A);expect((await db.query('select * from own_progress()')).rows).toEqual([{level_id:historicalCourse.id,best_ms:100}]);
 });

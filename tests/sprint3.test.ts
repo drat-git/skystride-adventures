@@ -1,9 +1,9 @@
 import { afterAll,beforeAll,it,expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
-import { practiceLevel } from '../src/level';
+import { historicalCourse, seedHistoricalV1 } from './fixtures/historical-v1';
 const db=new PGlite();
-const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',L=practiceLevel.id;
+const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',L=historicalCourse.id;
 let draft:string,attempt:string;
 async function role(name:string,user=''){await db.exec(`reset role;set role ${name};`);await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);}
 async function start(user=A){return (await db.query<{id:string}>('insert into play_attempts(user_id,level_id) values($1,$2) returning id',[user,L])).rows[0].id;}
@@ -14,32 +14,32 @@ beforeAll(async()=>{
  grant usage on schema auth to anon,authenticated;grant execute on function auth.uid() to anon,authenticated;`);
  for(const file of ['001_core.sql','002_trigger_privileges_and_indexes.sql','20261019144913_sprint3_progress_and_drafts.sql'])await db.exec(readFileSync(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
  await db.query('insert into auth.users values($1,$2),($3,$4)',[A,{display_name:'Player A'},B,{display_name:'Player B'}]);
- await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ await seedHistoricalV1(db);
 },30000);
 afterAll(async()=>{await db.close();});
 it('saves and reloads an own private draft and awards creation once',async()=>{
  await role('authenticated',A);
- draft=(await db.query<{id:string}>('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4) returning id',[A,'Draft','easy',practiceLevel.layout])).rows[0].id;
+ draft=(await db.query<{id:string}>('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4) returning id',[A,'Draft','easy',historicalCourse.layout])).rows[0].id;
  await db.query("update levels set title='Edited draft' where id=$1",[draft]);
- expect((await db.query('select title,published,layout from levels where id=$1',[draft])).rows[0]).toEqual({title:'Edited draft',published:false,layout:practiceLevel.layout});
- await db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Another','easy',practiceLevel.layout]);
+ expect((await db.query('select title,published,layout from levels where id=$1',[draft])).rows[0]).toEqual({title:'Edited draft',published:false,layout:historicalCourse.layout});
+ await db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Another','easy',historicalCourse.layout]);
  expect((await db.query('select achievement_code from player_achievements')).rows).toEqual([{achievement_code:'first_created_level'}]);
 });
 it('denies other-account/guest draft reads and writes, publishing and award forgery',async()=>{
  await role('authenticated',B);expect((await db.query('select * from levels where id=$1',[draft])).rows).toHaveLength(0);
  expect((await db.query("update levels set title='Stolen' where id=$1 returning id",[draft])).rows).toHaveLength(0);
- await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Stolen','easy',practiceLevel.layout])).rejects.toThrow();
+ await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Stolen','easy',historicalCourse.layout])).rejects.toThrow();
  expect((await db.query('select * from player_achievements')).rows).toHaveLength(0);
  await expect(db.query("insert into player_achievements values($1,'first_completion',now())",[B])).rejects.toThrow();
  await role('authenticated',A);await expect(db.query('update levels set published=true where id=$1',[draft])).rejects.toThrow();
  await expect(db.query('update levels set creator_id=$1 where id=$2',[B,draft])).rejects.toThrow();
  await role('anon');expect((await db.query('select * from levels')).rows).toHaveLength(1);
  await expect(db.query('select * from achievements')).rejects.toThrow();
- await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Guest','easy',practiceLevel.layout])).rejects.toThrow();
+ await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Guest','easy',historicalCourse.layout])).rejects.toThrow();
 });
 it('rejects malformed geometry at the database boundary',async()=>{
  await role('authenticated',A);
- for(const layout of [null,{}, {...practiceLevel.layout,start:null},{...practiceLevel.layout,finish:practiceLevel.layout.start},{...practiceLevel.layout,finish:{...practiceLevel.layout.start,extra:true}},{...practiceLevel.layout,start:{x:1,y:1}},{...practiceLevel.layout,platforms:[{x:0,y:12,width:25}]},{...practiceLevel.layout,hazards:[{x:1,y:11}]},{...practiceLevel.layout,checkpoints:[{x:2,y:11},{x:2,y:11}]}]){
+ for(const layout of [null,{}, {...historicalCourse.layout,start:null},{...historicalCourse.layout,finish:historicalCourse.layout.start},{...historicalCourse.layout,finish:{...historicalCourse.layout.start,extra:true}},{...historicalCourse.layout,start:{x:1,y:1}},{...historicalCourse.layout,platforms:[{x:0,y:12,width:25}]},{...historicalCourse.layout,hazards:[{x:1,y:11}]},{...historicalCourse.layout,checkpoints:[{x:2,y:11},{x:2,y:11}]}]){
   await expect(db.query('update levels set layout=$1 where id=$2',[layout,draft])).rejects.toThrow();
  }
 });

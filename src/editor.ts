@@ -1,36 +1,9 @@
 import { type Backend, type OwnedLevel } from './backend';
-import { validateLayout, type Layout, type Level, type CourseLayout } from './level';
+import { validateLayout, type Level } from './level';
 import type { LayoutV2 } from './course-format';
-import { EDITOR_TOOLS, DEFAULT_PROPERTIES, newEditorLayout, convertLegacyLayout, placeComponent, selectionsAt, replaceSelection, resizeCourse, describeCell, type Selection, type V2Tool, type ToolProperties } from './editor-tools';
+import { EDITOR_TOOLS, DEFAULT_PROPERTIES, newEditorLayout, placeComponent, selectionsAt, replaceSelection, resizeCourse, describeCell, type Selection, type V2Tool, type ToolProperties } from './editor-tools';
 import { mountGame, type RunResult, type RunState, type RunHud, type ControlAction } from './game';
 import { prefersReducedMotion } from './settings';
-
-export type EditorTool = 'platform' | 'hazard' | 'checkpoint' | 'item' | 'start' | 'finish' | 'erase';
-
-export function paintCell(layout: Layout, x: number, y: number, tool: EditorTool): Layout {
-  const next = structuredClone(layout);
-  const same = (p: { x: number; y: number }) => p.x === x && p.y === y;
-  next.platforms = next.platforms.flatMap(p => Array.from({ length: p.width }, (_, i) => ({ x: p.x + i, y: p.y, width: 1 }))).filter(p => !same(p));
-  next.hazards = next.hazards.filter(p => !same(p));
-  next.checkpoints = next.checkpoints.filter(p => !same(p));
-  next.items = next.items.filter(p => !same(p));
-  if (tool === 'platform') next.platforms.push({ x, y, width: 1 });
-  if (tool === 'hazard') next.hazards.push({ x, y });
-  if (tool === 'checkpoint') next.checkpoints.push({ x, y });
-  if (tool === 'item') next.items.push({ x, y });
-  if (tool === 'start') next.start = { x, y };
-  if (tool === 'finish') next.finish = { x, y };
-  // Keep adjacent painted tiles in runs, rather than spending one segment per tile.
-  const tiles = next.platforms.sort((a, b) => a.y - b.y || a.x - b.x);
-  next.platforms = [];
-  for (const tile of tiles) {
-    const previous = next.platforms.at(-1);
-    if (previous && previous.y === tile.y && previous.x + previous.width >= tile.x) {
-      previous.width = Math.max(previous.width, tile.x + 1 - previous.x);
-    } else next.platforms.push({ ...tile });
-  }
-  return next;
-}
 
 export interface EditorController {
   destroy(): void;
@@ -46,7 +19,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   let active = true, busy = false, beforeUnloadAttached = false, generation = 0;
   let id: string = crypto.randomUUID();
   let current: OwnedLevel | undefined;
-  let layout: CourseLayout = newEditorLayout();
+  let layout: LayoutV2 = newEditorLayout();
   let courses: OwnedLevel[] = [];
   let cursor = { x: 2, y: 22 }, cellSize = 32, renderFrame = 0;
   let selection: Selection | undefined, previewDead = false, previewHasCheckpoint = false;
@@ -132,7 +105,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
 
   function controls() {
     if (!active) return;
-    const dirty = isDirty(), published = !!current?.published, readOnly = published || layout.version === 1;
+    const dirty = isDirty(), published = !!current?.published, readOnly = published;
     viewport.setAttribute('aria-readonly', String(readOnly));
     viewport.setAttribute('aria-busy', String(busy));
     for (const control of host.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>('input,select,button')) control.disabled = busy;
@@ -158,7 +131,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     el<HTMLButtonElement>('#pause-preview').textContent = paused ? 'Resume preview' : 'Pause preview';
     el('#retry-playtest').hidden = !pendingCompletion;
     el<HTMLButtonElement>('#retry-playtest').disabled = busy;
-    el('#draft-status').textContent = layout.version === 1 ? 'Legacy course · read-only. Copy to new draft to upgrade its tile layout, then save and test it under the new rules.' : published ? `Published course · revision ${current!.revision}. This version is read-only. Copy it to a new private draft to make changes.` :
+    el('#draft-status').textContent = published ? `Published course · revision ${current!.revision}. This version is read-only. Copy it to a new private draft to make changes.` :
       current ? `Private draft · revision ${current.revision}${dirty ? ' · Unsaved changes: save and retest before publishing.' : current.canPublish && !approvalInvalidated ? ' · Saved playtest passed. Ready to publish.' : ' · Save, test the saved version, then publish.'}` :
       'New private draft. Save it before starting a publication playtest.';
     if (dirty && !beforeUnloadAttached) { window.addEventListener('beforeunload', beforeUnload); beforeUnloadAttached = true; }
@@ -178,7 +151,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   function changed() {
-    if (busy || current?.published || layout.version === 1) return;
+    if (busy || current?.published) return;
     approvalInvalidated = true;
     if (previewIsSavedTest) stop();
     else preview?.scene.setPaused(true);
@@ -191,7 +164,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   viewport.style.overflow = 'auto'; viewport.style.maxHeight = '65vh';
   canvas.style.position = 'relative';
   const tool = () => el<HTMLSelectElement>('#tile-tool').value as V2Tool;
-  const readOnly = () => !!current?.published || layout.version === 1;
+  const readOnly = () => !!current?.published;
 
   function properties(): ToolProperties {
     const values = { ...DEFAULT_PROPERTIES };
@@ -222,7 +195,6 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   function inspectCell(index = 0) {
-    if (layout.version === 1) { selection = undefined; syncProperties(); return; }
     const picks = selectionsAt(layout, cursor.x, cursor.y), select = el<HTMLSelectElement>('#cell-components');
     select.replaceChildren(...picks.map((pick, i) => new Option(pick.label, String(i))));
     selection = picks[index]; select.value = String(index);
@@ -232,14 +204,13 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   function syncWorldFields() {
-    const v2 = layout.version === 2 ? layout : undefined;
-    el<HTMLSelectElement>('#course-theme').value = v2?.theme ?? 'overworld';
+    el<HTMLSelectElement>('#course-theme').value = layout.theme;
     el<HTMLInputElement>('#course-cols').value = String(layout.cols);
-    el<HTMLInputElement>('#course-time').value = String(v2?.timeLimit ?? 300);
-    el<HTMLInputElement>('#finish-height').value = String(v2?.finishHeight ?? 5);
+    el<HTMLInputElement>('#course-time').value = String(layout.timeLimit);
+    el<HTMLInputElement>('#finish-height').value = String(layout.finishHeight);
     el<HTMLInputElement>('#cursor-x').max = String(layout.cols); el<HTMLInputElement>('#cursor-y').max = String(layout.rows);
     el<HTMLInputElement>('#component-x').max = String(layout.cols); el<HTMLInputElement>('#component-y').max = String(layout.rows);
-    viewport.dataset.theme = v2?.theme ?? 'overworld';
+    viewport.dataset.theme = layout.theme;
     viewport.setAttribute('aria-rowcount', String(layout.rows)); viewport.setAttribute('aria-colcount', String(layout.cols));
   }
 
@@ -259,7 +230,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
 
   function edit(action: (draft: LayoutV2) => LayoutV2) {
     if (busy) return;
-    if (readOnly() || layout.version !== 2) { note('This course is read-only. Copy it to a new draft to make changes.'); return; }
+    if (readOnly()) { note('This course is read-only. Copy it to a new draft to make changes.'); return; }
     try {
       layout = action(layout); selection = undefined; el('#cell-components-label').hidden = true;
       cursor.x = Math.min(cursor.x, layout.cols - 1); cursor.y = Math.min(cursor.y, layout.rows - 1);
@@ -401,7 +372,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   async function save(event: SubmitEvent) {
-    event.preventDefault(); if (busy || current?.published || layout.version === 1) return;
+    event.preventDefault(); if (busy || current?.published) return;
     if (!['#draft-title', '#draft-description'].every(selector => el<HTMLInputElement>(selector).reportValidity())) return;
     stop(); busy = true; saveAttempted = true; controls(); note('Saving draft…');
     try {
@@ -419,7 +390,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     const stamp = generation;
     previewIsSavedTest = !!testId;
     el('#draft-preview').hidden = false; el('#preview-controls').hidden = false; el('#preview-panel').hidden = false;
-    el('#draft-preview').style.aspectRatio = level.layout.version === 1 ? '12 / 7' : window.innerWidth < 600 ? '6 / 5' : '16 / 9';
+    el('#draft-preview').style.aspectRatio = window.innerWidth < 600 ? '6 / 5' : '16 / 9';
     el('#preview-state').textContent = testId ? 'Saved-version playtest. Reach the finish to approve this revision.' : 'Local preview. Results do not approve publication.';
     el('#preview-hud').textContent = '';
     preview = mountGame(el('#draft-preview'), level, result => {
@@ -468,7 +439,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   async function testSaved() {
-    if (busy || !current || current.published || layout.version === 1 || isDirty()) return;
+    if (busy || !current || current.published || isDirty()) return;
     stop(); const stamp = generation; busy = true; controls(); note('Starting a playtest of the saved version…');
     try {
       const test = await api.startDraftPlaytest(id, current.revision);
@@ -503,7 +474,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   el('#copy-draft').onclick = () => {
     if (busy) return;
     if (isDirty() && !window.confirm('Keep these unsaved edits in a new private draft? The original saved course will stay unchanged.')) return;
-    const copy = values(); if (copy.layout.version === 1) copy.layout = convertLegacyLayout(copy.layout); copy.title = `${copy.title.slice(0, 53)} (copy)`;
+    const copy = values(); copy.title = `${copy.title.slice(0, 53)} (copy)`;
     load(undefined, copy);
   };
   el<HTMLFormElement>('#draft-form').onsubmit = event => { void save(event); };

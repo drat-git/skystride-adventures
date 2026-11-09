@@ -314,18 +314,6 @@ footer button {
   letter-spacing:1px;
   margin-top:8px
 }
-.title-foot {
-  position:absolute;
-  bottom:1%;
-  left:0;
-  width:100%;
-  text-align:center;
-  font-size:9px;
-  letter-spacing:2px;
-  color:white;
-  text-shadow:2px 2px #17233d;
-  margin:0
-}
 @keyframes prompt {
   50% {
     opacity:.75
@@ -1285,11 +1273,6 @@ input[type=checkbox] {
     margin-top:13%;
     font-size:19px
   }
-  .title-foot {
-    font-size:8px;
-    letter-spacing:1px;
-    bottom:20px
-  }
   .editor-layout {
     grid-template-columns:1fr
   }
@@ -1390,9 +1373,6 @@ input[type=checkbox] {
     top:auto;
     bottom:6%;
     height:83.333vw
-  }
-  .title-foot {
-    bottom:2%
   }
   .overlay-panel {
     max-width:350px

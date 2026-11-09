@@ -11,10 +11,11 @@ const check = message => { checks.push(message); console.log('PASS', message); }
 const fixture = `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0}#app{max-width:1450px;margin:auto;padding:24px}</style></head><body><div id="app"></div><script type="module">
 import '/src/styles.css';
 import { mountEditor } from '/src/editor.ts';
-import { validateLayout, practiceLevel } from '/src/level.ts';
+import { validateLayout } from '/src/level.ts';
+import { newEditorLayout } from '/src/editor-tools.ts';
 const records = new Map(), calls = [], playtests = new Map();
 let lost = true;
-const legacy = {...structuredClone(practiceLevel),id:'11111111-1111-4111-8111-111111111111',title:'Legacy published course',revision:1,published:true,canPublish:false};records.set(legacy.id,legacy);
+const published = {id:'44444444-4444-4444-8444-444444444444',title:'Published V2 course',description:'Immutable editor fixture',difficulty:'easy',layout:newEditorLayout(),revision:1,published:true,canPublish:false};records.set(published.id,published);
 const api = {
   async ownedLevels(){return [...records.values()].map(v=>structuredClone(v));},
   async getOwnedLevel(_user,id){const row=records.get(id);if(!row)throw Error('Not found');return structuredClone(row);},
@@ -179,7 +180,8 @@ try {
   assert.equal(await page.locator('#copy-draft').isEnabled(), true);
   check('Real V2 preview preserves typed metadata; actual keyboard completion confirms saved playtest and publication becomes immutable');
 
-  await page.locator('#draft-list').selectOption('11111111-1111-4111-8111-111111111111'); await message('Course loaded from the database.');
+  const sourceBefore = await page.evaluate(() => structuredClone(window.editorTest.records.get('44444444-4444-4444-8444-444444444444')));
+  await page.locator('#draft-list').selectOption('44444444-4444-4444-8444-444444444444'); await message('Course loaded from the database.');
   assert.equal(await page.locator('#save-draft').isDisabled(), true); assert.equal(await page.locator('#draft-title').isDisabled(), true);
   assert.equal(await page.locator('#editor-viewport').getAttribute('aria-readonly'), 'true');
   await page.locator('#copy-draft').click();
@@ -187,11 +189,14 @@ try {
   assert.equal(await page.locator('#editor-viewport').getAttribute('aria-readonly'), 'false');
   await page.locator('#validate-draft').click(); await message('Course geometry is valid');
   await page.locator('#save-draft').click(); await message('Draft saved.');
-  const converted = await page.evaluate(id => window.editorTest.records.get(id), await page.locator('#draft-list').inputValue());
-  assert.equal(converted.layout.version, 2);
-  assert.equal(await page.evaluate(() => window.editorTest.records.get('11111111-1111-4111-8111-111111111111').layout.version), 1);
+  const copied = await page.evaluate(id => window.editorTest.records.get(id), await page.locator('#draft-list').inputValue());
+  assert.equal(copied.layout.version, 2);
+  assert.notEqual(copied.id, sourceBefore.id);
+  assert.equal(copied.published, false);
+  assert.equal(copied.canPublish, false);
+  assert.deepEqual(await page.evaluate(() => window.editorTest.records.get('44444444-4444-4444-8444-444444444444')), sourceBefore);
   await page.screenshot({ path: `${output}/desktop-editor.png`, fullPage: true });
-  check('Legacy courses stay read-only in controls and ARIA; copied V2 drafts validate/save without changing the original');
+  check('Published V2 courses stay read-only in controls and ARIA; copied drafts have new identities and no approval while preserving the original');
   await page.evaluate(() => { window.editorTest.controller.destroy(); document.querySelector('#app').replaceChildren(); });
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.waitForTimeout(100);

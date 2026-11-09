@@ -1,4 +1,3 @@
-import type { Layout, CourseLayout } from './level';
 import { V2_ARRAY_LIMITS, V2_MAX_BYTES, V2_MAX_ENTITIES, type LayoutV2, type BlockContent, type PowerupKind, type EnemyKind, type EnemyBehavior, type Obstacle, type Decoration, type Hazard } from './course-format';
 
 export type V2Tool = 'select' | 'terrain' | 'platform' | 'solid' | 'breakable' | 'glow' | 'hidden' | 'item' | 'powerup' | 'hazard' | 'checkpoint' | 'start' | 'finish' | 'enemy' | 'moving-platform' | 'obstacle' | 'decoration' | 'erase';
@@ -27,14 +26,6 @@ const covers = (p: Component, x: number, y: number) => x >= p.x && x < p.x + (p.
 export function newEditorLayout(): LayoutV2 {
   return { version: 2, cols: 64, rows: 25, theme: 'overworld', timeLimit: 300, start: { x: 2, y: 22 }, finish: { x: 60, y: 22 }, finishHeight: 5,
     terrain: [{ x: 0, y: 23, width: 64 }, { x: 0, y: 24, width: 64 }], platforms: [], blocks: [], items: [], powerups: [], hazards: [], checkpoints: [], enemies: [], movingPlatforms: [], obstacles: [], decorations: [] };
-}
-
-/** Preserve the legacy tile topology in the new 25-row world. A new copy must be tested under V2 rules. */
-export function convertLegacyLayout(old: Layout): LayoutV2 {
-  const shift = 25 - old.rows, point = (p: { x: number; y: number }) => ({ x: p.x, y: p.y + shift });
-  return { ...newEditorLayout(), cols: old.cols, start: point(old.start), finish: point(old.finish), finishHeight: Math.min(5, old.finish.y + shift + 1),
-    terrain: [], platforms: old.platforms.map(p => ({ ...point(p), width: p.width })),
-    items: old.items.map(point), checkpoints: old.checkpoints.map(point), hazards: old.hazards.map(p => ({ ...point(p), width: 1, kind: 'spike' })) };
 }
 
 function clearRectangle(layout: LayoutV2, x: number, y: number, width: number, height: number, decorations = false) {
@@ -146,13 +137,7 @@ export function resizeCourse(layout: LayoutV2, cols: number): LayoutV2 {
   return { ...structuredClone(layout), cols };
 }
 
-export function describeCell(layout: CourseLayout, x: number, y: number): { kind: string; label: string; description: string } {
-  if (layout.version === 1) {
-    let kind = layout.platforms.some(p => covers(p, x, y)) ? 'platform' : 'empty', label = '';
-    for (const [key, symbol] of [['hazards', '▲'], ['items', '●'], ['checkpoints', 'C']] as const) if (layout[key].some(p => covers(p, x, y))) { kind = key.slice(0, -1); label = symbol; }
-    if (covers(layout.start, x, y)) { kind = 'start'; label = 'S'; } if (covers(layout.finish, x, y)) { kind = 'finish'; label = 'F'; }
-    return { kind, label, description: kind };
-  }
+export function describeCell(layout: LayoutV2, x: number, y: number): { kind: string; label: string; description: string } {
   const picks = selectionsAt(layout, x, y);
   const item = picks.find(p => p.collection === 'start' || p.collection === 'finish') ?? picks.find(p => !['terrain', 'platforms', 'decorations'].includes(p.collection)) ?? picks.find(p => p.collection !== 'decorations') ?? picks[0];
   if (!item) return { kind: 'empty', label: '', description: 'empty' };

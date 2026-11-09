@@ -1,22 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Attempt } from '../src/attempt';
-import { practiceLevel, validateLayout } from '../src/level';
+import { validateLayout } from '../src/level';
+import { testCourse } from './fixtures/course';
 import { AI_UNAVAILABLE_MESSAGE, buildEditorContext, buildGameplayContext, requestEditorFeedback, requestGameplayHint } from '../src/ai';
 import { applyMotionPreference, MOTION_STORAGE_KEY, prefersReducedMotion, readMotionPreference, saveMotionPreference } from '../src/settings';
 
 describe('collectible geometry', () => {
   it('accepts airborne items without requiring a platform', () => {
-    expect(() => validateLayout({ ...practiceLevel.layout, items: [{ x: 3, y: 2 }] })).not.toThrow();
+    expect(() => validateLayout({ ...testCourse.layout, items: [{ x: 3, y: 2 }] })).not.toThrow();
   });
   it.each([
-    [{ x: 3, y: 12 }], // Inside the floor.
-    [{ x: 7, y: 11 }], // In a hazard.
+    [{ x: 3, y: 23 }], // Inside the floor.
+    [{ x: 7, y: 22 }], // In a hazard.
     [{ x: 3, y: 2 }, { x: 3, y: 2 }],
-    [{ x: 24, y: 2 }],
-    [{ x: 3, y: 13 }],
+    [{ x: 64, y: 2 }],
+    [{ x: 3, y: 25 }],
     [{ x: 3.5, y: 2 }],
   ].map(items => ({ items })))('rejects invalid items %#', ({ items }) => {
-    expect(() => validateLayout({ ...practiceLevel.layout, items })).toThrow();
+    expect(() => validateLayout({ ...testCourse.layout, items })).toThrow();
   });
 });
 
@@ -108,7 +109,7 @@ describe('device-local motion preference', () => {
 
 describe('deferred AI context', () => {
   it('snapshots editable context and returns only an honest unavailable response', async () => {
-    const draft = structuredClone(practiceLevel);
+    const draft = structuredClone(testCourse);
     const editor = buildEditorContext(draft);
     const state = { position: { x: 1, y: 11 }, checkpoint: null, elapsedMs: 100, deaths: 0, collected: 0, totalItems: 0, paused: false, finished: false };
     const gameplay = buildGameplayContext(draft, state);

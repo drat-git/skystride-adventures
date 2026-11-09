@@ -28,7 +28,7 @@ Feature inventory and new entry points:
 | Checkpoints, optional collectibles, pause, restart | Shared course runtime |
 | Reduced decorative motion | Settings |
 | Disabled AI hint and feedback placeholders | Play controls / Workshop |
-| Original First Flight practice and saved V1 course compatibility | Classic practice / Community courses; read-only legacy editor with copy-to-V2 |
+| V1 course compatibility | Retired by explicit user request after V2 release; accounts, V2 records and earned awards retained |
 
 ## Reference fidelity and course provenance
 
@@ -51,7 +51,7 @@ DS reference map, inspected directly: <https://www.mariouniverse.com/wp-content/
 
 ## Data and isolation
 
-The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. No data retirement was performed. The existing `.env.local` is preserved; local development overrides its URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
+The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. The subsequent user-authorized retirement removed V1 course-owned records while preserving accounts, earned awards and all V2 records; see the retirement evidence below. The existing `.env.local` is preserved; local development overrides its URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
 
 The existing eight tables remain. V2 expands the declarative `levels.layout` JSON, replaces the fixed-V1 validation constraints with a V1/V2 dispatcher, and adds server-owned `official_order`. Existing save, playtest, publication, community, and completion contracts remain. Progress is aggregated from existing completed attempts; no duplicate progress table is introduced.
 
@@ -59,11 +59,13 @@ Local testing runs the real Postgres schema, functions, triggers, constraints, a
 
 ## Later cutover and V1 retirement
 
-The first V2 cutover applied the three tested additive migrations (including six official courses) to the current Supabase project, then deployed the matching frontend through GitHub Pages. Hosted authentication, RPC behavior, persistence, asset base paths, and two-account publication/community evidence are tracked in [the release record](OVERHAUL_VERIFICATION.md). Retiring V1 remains a separate operation.
+The user explicitly authorized full V1 removal after the verified V2 rollout. Migration `20261109072050_retire_v1_courses.sql` deletes only levels with `layout.version = 1` and their cascading attempts, playtests, ratings and favorites. It rejects V1 layouts, drops the V1 validator and moves the timed achievement to the existing Meadow Run V2 UUID with its 30,000ms catalog threshold. The stable award key remains to preserve previously earned rows and timestamps.
 
-The user permits V1 levels, layouts, and frontend removal once V2 is ready. Before that cleanup, produce a recoverable database export and an exact affected-row inventory for V1 courses and their attempts, playtests, ratings and favorites. Preserve accounts/profiles and already-earned achievements. Retarget the old timed First Flight achievement to an explicitly chosen V2 challenge with a verified threshold before removing its course; keep earned awards intact. Stage the removal in a separate reviewed migration, then remove the legacy runtime/types/tests and the Classic practice entry. Never repurpose an old course UUID for a different layout or mix its historical times with new rankings.
+Before deletion, a refreshed recovery archive captured 5 V1 levels, 13 attempts, 5 draft playtests, 3 ratings, 3 favorites and the old timed-achievement catalog row at `output/overhaul/v1-retirement/hosted-v1-recovery.json` (ignored, mode0600). Pre/post checksums proved the 7 auth users, 7 identities, 11 sessions, 7 profiles, 7 earned awards, 8 existing V2 levels and all V2-owned records unchanged. The persistent local database also has a separate recovery copy before its migration.
 
-Rollback before retirement must account for the old frontend's V1-only parser: preserve the additive schema and either use a compatibility frontend that filters unsupported layouts or prepare a reversible change to new-course visibility before restoring the old frontend. Restoring the old bundle alone would break its mixed-version community listing. Rollback after retirement also requires the archived records. Do not combine data deletion with the first V2 rollout.
+The active app no longer contains a V1 layout, validator, renderer, practice menu or editor conversion. Obsolete V1 seed and browser/API scripts are removed. Current seed startup cannot recreate V1. Historical immutable migrations and isolated migration-test fixtures remain to reproduce safe upgrades; existing report files remain outside this game phase.
+
+Restoration, if ever requested, requires reinstating the historical validation/function definitions before importing the archived records in dependency order, and deploying the matching compatibility frontend. No old course UUID is reused for a new layout. Git history and the local recovery archive preserve that option without keeping V1 live.
 
 ## Verification
 

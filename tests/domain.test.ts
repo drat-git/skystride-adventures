@@ -1,11 +1,12 @@
 import { describe,it,expect } from 'vitest';
-import { validateLayout,practiceLevel,parseLevel } from '../src/level';
+import { validateLayout,parseLevel } from '../src/level';
+import { testCourse } from './fixtures/course';
 import { validateAccount, validateLogin } from '../src/auth';
 import { Attempt } from '../src/attempt';
 describe('untrusted level data',()=>{
- it('accepts the reproducible course',()=>expect(()=>parseLevel(practiceLevel)).not.toThrow());
- it.each([null,{}, {...practiceLevel.layout,version:2}, {...practiceLevel.layout,platforms:[{x:23,y:12,width:2}]}, {...practiceLevel.layout,start:{x:7,y:11}}, {...practiceLevel.layout,finish:{x:1,y:11}}, {...practiceLevel.layout,checkpoints:[{x:3,y:2}]}, {...practiceLevel.layout,hazards:[{x:3,y:11},{x:3,y:11}]}])('rejects malformed or unsafe layout %#',(layout)=>expect(()=>validateLayout(layout)).toThrow());
- it('rejects missing record metadata before rendering',()=>expect(()=>parseLevel({...practiceLevel,title:null})).toThrow());
+ it('accepts the reproducible course',()=>expect(()=>parseLevel(testCourse)).not.toThrow());
+ it.each([null,{}, {...testCourse.layout,version:1}, {...testCourse.layout,platforms:[{x:63,y:12,width:2}]}, {...testCourse.layout,start:{x:7,y:11}}, {...testCourse.layout,finish:{x:1,y:22}}, {...testCourse.layout,checkpoints:[{x:3,y:2}]}, {...testCourse.layout,hazards:[{x:3,y:11},{x:3,y:11}]}])('rejects malformed or unsafe layout %#',(layout)=>expect(()=>validateLayout(layout)).toThrow());
+ it('rejects missing record metadata before rendering',()=>expect(()=>parseLevel({...testCourse,title:null})).toThrow());
 });
 describe('account input',()=>{
  it('allows a valid account',()=>expect(()=>validateAccount('player@example.com','correct-horse','Player 1')).not.toThrow());

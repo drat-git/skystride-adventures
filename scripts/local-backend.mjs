@@ -42,7 +42,9 @@ export async function createLocalBackend({dataDir,port=5187,faults={}}={}){
    const body=sql.replace(/^\s*begin;\s*/mi,'').replace(/\bcommit;\s*$/i,'');
    await db.transaction(async tx=>{await tx.exec(body);await tx.query('insert into local_dev.migrations(name,sha256) values($1,$2)',[name,hash]);});
   }
-  if(!(await db.query("select id from public.levels where id='11111111-1111-4111-8111-111111111111'")).rows.length)await db.exec(await readFile(join(project,'supabase/seed.sql'),'utf8'));
+  // Official V2 courses are installed by their immutable migration. Do not
+  // recreate a retired course when opening an existing local database.
+  await db.exec(await readFile(join(project,'supabase/seed.sql'),'utf8'));
  }catch(error){await db.close();throw error;}
  const publicUser=account=>({id:account.id,email:account.email,aud:'authenticated',role:'authenticated',app_metadata:{provider:'email',providers:['email']},user_metadata:{display_name:account.displayName},created_at:account.createdAt,email_confirmed_at:account.createdAt,confirmed_at:account.createdAt,identities:[]});
  const issue=async account=>{

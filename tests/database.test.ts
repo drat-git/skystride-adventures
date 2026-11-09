@@ -1,9 +1,9 @@
 import { afterAll,beforeAll,it,expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
-import { practiceLevel } from '../src/level';
+import { historicalCourse, seedHistoricalV1 } from './fixtures/historical-v1';
 const db=new PGlite();
-const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',L=practiceLevel.id;
+const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',L=historicalCourse.id;
 async function role(name:string,user=''){await db.exec(`reset role;set role ${name};`);await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);}
 beforeAll(async()=>{
  await db.exec(`create role anon;create role authenticated;create schema auth;
@@ -15,8 +15,8 @@ beforeAll(async()=>{
  await db.exec('grant execute on function public.handle_new_user() to anon,authenticated;');
  await db.exec(readFileSync(new URL('../supabase/migrations/002_trigger_privileges_and_indexes.sql',import.meta.url),'utf8'));
  await db.query('insert into auth.users values($1,$2),($3,$4)',[A,{display_name:'Player A'},B,{display_name:'Player B'}]);
- await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
- const seed=await db.query('select layout from levels where id=$1',[L]);expect(seed.rows[0]).toMatchObject({layout:practiceLevel.layout});
+ await seedHistoricalV1(db);
+ const seed=await db.query('select layout from levels where id=$1',[L]);expect(seed.rows[0]).toMatchObject({layout:historicalCourse.layout});
 },30000);
 afterAll(async()=>{await db.close();});
 it('trigger creates profiles without passwords',async()=>{await role('authenticated',A);const r=await db.query('select * from profiles');expect(r.rows).toHaveLength(1);expect(r.rows[0]).toMatchObject({id:A,display_name:'Player A'});});

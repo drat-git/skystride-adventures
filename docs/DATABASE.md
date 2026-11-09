@@ -1,6 +1,6 @@
 # Database dictionary
 
-SkyStride uses PostgreSQL on Supabase. The application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. V2 retains these tables and adds course format support and account progress aggregation. The three V2 migrations below were verified locally and applied to hosted Supabase on 9 November 2026. See [the release record](OVERHAUL_VERIFICATION.md) for hosted migration IDs and preservation evidence.
+SkyStride uses PostgreSQL on Supabase. The application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. V2 retains these tables and adds course format support and account progress aggregation. The V2 migrations and subsequent V1 retirement below were verified locally and applied to hosted Supabase on 9 November 2026. See [the release record](OVERHAUL_VERIFICATION.md) for hosted migration IDs and preservation evidence.
 
 In production, passwords, confirmation tokens and authentication sessions remain in managed Supabase Auth. Application tables do not store or read credential columns. The isolated [local Auth/REST fixture](LOCAL_DEVELOPMENT.md) uses separate local credentials and does not verify managed Auth or email delivery.
 
@@ -16,10 +16,11 @@ Migration files are ordered and transactional:
 6. `supabase/migrations/20261109055844_overhaul_v2_course_format.sql`
 7. `supabase/migrations/20261109060418_overhaul_official_courses.sql`
 8. `supabase/migrations/20261109062810_overhaul_render_budget.sql`
+9. `supabase/migrations/20261109072050_retire_v1_courses.sql`
 
-For a **fresh V2 project**, apply all eight once in that order, then run `supabase/seed.sql` to install legacy First Flight while compatibility is retained. Migration 7 installs the six new official courses. Configure the frontend with the project URL and publishable key, and configure the hosted URL in Supabase Auth's redirect allowlist. Never put a service-role key in the frontend.
+For a **fresh V2 project**, apply all nine once in that order. Migration 7 installs the six official courses; `supabase/seed.sql` now verifies their presence without adding or changing records. Configure the frontend with the project URL and publishable key, and configure the hosted URL in Supabase Auth's redirect allowlist. Never put a service-role key in the frontend.
 
-For the **existing Sprint 4 project**, inspect installed history and objects, then apply only missing migrations 6–8 during the later V2 cutover. They preserve V1 layouts, existing records, RPC contracts and permissions. `official_order` is server-owned; application roles cannot select their own official placement. The official-course migration refuses conflicting existing records instead of overwriting published layouts. [Cutover and retirement notes](OVERHAUL.md#later-cutover-and-v1-retirement) describe hosted verification and the separate archive/removal phase.
+For the **existing Sprint 4 project**, inspect installed history and objects, then apply only missing migrations 6–9 after archiving any V1 courses and their dependents. Migrations 6–8 are additive; migration 9 deletes V1 courses and their cascading attempts/playtests/ratings/favorites, preserves accounts/V2/earned awards, and requires the published Meadow Run replacement to exist. `official_order` is server-owned; application roles cannot select their own official placement. The official-course migration refuses conflicting existing records instead of overwriting published layouts. [Cutover and retirement notes](OVERHAUL.md#later-cutover-and-v1-retirement) describe hosted verification and the separate archive/removal phase.
 
 For the **existing Sprint 2 project**, inspect the hosted schema and migration history first. Preserve its profiles, published seed course and interaction records. Once the two core migrations are confirmed installed, apply only the missing Sprint 3 migration followed by both Sprint 4 migrations. Do not rerun `001_core.sql`, reset the database, reseed existing courses, or replace existing data. If the privilege/index correction is missing, reconcile that specific migration before continuing. A migration version alone is not proof that its expected tables, policies and grants exist; verify both history and actual objects.
 
@@ -48,7 +49,7 @@ The auth signup trigger creates the profile. Leaderboards expose display names t
 | title | TEXT | No | CHECK trimmed length 1–60 | Course title |
 | description | TEXT | No | DEFAULT empty; CHECK length <= 280 | Course summary |
 | difficulty | TEXT | No | CHECK easy / medium / hard | Difficulty label |
-| layout | JSONB | No | Validated V1 or V2 geometry and bounded declarative component data | Course components, theme, start and finish |
+| layout | JSONB | No | Validated V2 geometry and bounded declarative component data | Course components, theme, start and finish |
 | official_order | SMALLINT | Yes | UNIQUE; CHECK 1–6; server-owned | Stable ordering of the six new official courses; NULL for other courses |
 | published | BOOLEAN | No | DEFAULT false | Public visibility; publication RPC controls transition |
 | revision | INTEGER | No | DEFAULT 1; CHECK > 0 | Server-managed version of saved metadata/layout |
@@ -118,9 +119,9 @@ Favorite uses insert-on-conflict-do-nothing; unfavorite deletes the player's pai
 | code | TEXT | No | PK; fixed three codes | Achievement identity |
 | name | TEXT | No | Human-readable name | Award label |
 | rule | TEXT | No | CHECK first_completion / first_created_level / timed_course | Backend event rule |
-| threshold_ms | INTEGER | Yes | Positive for timed rule; NULL otherwise | Catalog threshold, initially 30,000 ms for First Flight |
+| threshold_ms | INTEGER | Yes | Positive for timed rule; NULL otherwise | Catalog threshold, 30,000 ms for Meadow Run |
 
-The three codes are `first_created_level`, `first_completion` and `first_flight_under_30s`. Draft creation awards the first once. Normal published-course completion awards the second. The timed award requires course UUID `11111111-1111-4111-8111-111111111111` and elapsed time strictly below the catalog threshold; it does not depend on the title. Playtest completion and publication do not award completion achievements.
+The three codes are `first_created_level`, `first_completion` and `first_flight_under_30s`. Draft creation awards the first once. Normal published-course completion awards the second. The retained timed award key now displays “Meadow Run under 30 seconds” and requires V2 course UUID `22222222-2222-4222-8222-000000000001` and elapsed time strictly below the catalog threshold; it does not depend on the title. Playtest completion and publication do not award completion achievements.
 
 ## player_achievements
 
@@ -164,7 +165,7 @@ Privileged implementations live in `private`, use `SECURITY DEFINER` only where 
 
 ## Geometry, local state and trust model
 
-Legacy V1 validation remains unchanged: a 24 × 14 grid, integer coordinates, 1–60 platform segments, at most 50 of each point type, distinct start/finish and unique positions within each hazard/checkpoint/item array. Start, finish and checkpoints must be outside platforms/hazards and directly supported by a platform. Items must be in bounds and outside platforms/hazards; airborne items are allowed. SQL caps V1 stored layout size at 128 KiB.
+V1 layouts are rejected by both the application and active database constraints. The V1 validator is removed. Historical migration files and isolated upgrade-test fixtures remain for reproducibility; they are not an active course format.
 
 V2 uses 18px tiles, 25 rows and 24–512 columns with overworld, cave or sky themes. Client and SQL whitelist exact fields and component types; executable data, URLs, pipes and teleport hooks are excluded. Per-array bounds, a 4,096-component cap, a 256 KiB payload limit and a 32,768 expanded-tile budget constrain rendering work. Runs count by width, obstacles by width × height and other components individually. Starts, finishes and checkpoints must be safe and supported; items and loose power-ups must be outside solids and hazards. Moving-platform endpoints stay within the world. The validators check geometry and resource bounds, not reachability; saved-version playtesting remains required for publication.
 

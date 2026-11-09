@@ -1,6 +1,6 @@
 import './styles.css';
 import { backend, localBackend, type CourseSummary, type InteractionState } from './backend';
-import { practiceLevel, type Level } from './level';
+import type { Level } from './level';
 import { mountGame, type RunResult, type RunState, type RunHud, type ControlAction } from './game';
 import { officialCourses, nextOfficialCourse, themeName, titleCourse } from './content/official';
 import { mountEditor, type EditorController } from './editor';
@@ -53,15 +53,18 @@ function shell(title: string, body: string) {
 }
 function title() {
   screen = 'title'; clearScreen(); root.className = 'screen-title';
-  root.innerHTML = `<main class="title-screen"><div id="title-demo" class="title-demo" aria-hidden="true"></div><div class="title-copy"><p class="eyebrow">A LITTLE COURAGE. A WELL-TIMED JUMP.</p><h1>SKYSTRIDE<span>ADVENTURES</span></h1><button id="enter-menu" class="start-prompt">PRESS ANY KEY <span>or tap to start</span></button></div><p class="title-foot">SIX WORLDS ABOVE THE ORDINARY</p></main>`;
+  root.innerHTML = `<main class="title-screen"><div id="title-demo" class="title-demo" aria-hidden="true"></div><div class="title-copy"><p class="eyebrow">A LITTLE COURAGE. A WELL-TIMED JUMP.</p><h1>SKYSTRIDE<span>ADVENTURES</span></h1><button id="enter-menu" class="start-prompt">PRESS ANY KEY <span>or tap to start</span></button></div></main>`;
+  const titleSurface = root.querySelector<HTMLElement>('.title-screen')!;
   currentGame = mountGame(document.getElementById('title-demo')!, titleCourse(), () => {}, {demo:true});
   let activationKey: string | undefined;
   const down = (event: KeyboardEvent) => { if(event.repeat)return; event.preventDefault(); event.stopImmediatePropagation(); activationKey = event.code; };
   const up = (event: KeyboardEvent) => { if(event.code!==activationKey)return; event.preventDefault(); event.stopImmediatePropagation(); home(); };
   const pointer = (event: Event) => { event.preventDefault(); event.stopPropagation(); home(); };
   document.addEventListener('keydown', down, true); document.addEventListener('keyup', up, true);
-  root.addEventListener('click', pointer, {once:true});
-  screenCleanup = () => { document.removeEventListener('keydown', down, true); document.removeEventListener('keyup', up, true); root.removeEventListener('click', pointer); };
+  // This new subtree cannot receive the menu click that opened it. A handler on
+  // the persistent root would catch that same bubbling click and reopen home.
+  titleSurface.addEventListener('click', pointer, {once:true});
+  screenCleanup = () => { document.removeEventListener('keydown', down, true); document.removeEventListener('keyup', up, true); titleSurface.removeEventListener('click', pointer); };
 }
 function message(text: string, error = false) {
   const el = document.getElementById('message');
@@ -87,13 +90,13 @@ function home() {
   screen = 'home';
   shell('Your next adventure<br><em>starts up here.</em>', `<div class="menu-world" aria-hidden="true"><span class="menu-cloud c1"></span><span class="menu-cloud c2"></span><span class="menu-island"><i class="player-icon"></i></span><span class="menu-island small-island"></span></div>
     <div class="main-menu" aria-label="Main menu"><div class="primary-menu">${button('official', '<span class="menu-glyph">▶</span> Play adventure <small>Six official courses · three worlds</small>')}${button('levels', '<span class="menu-glyph">♧</span> Community courses <small>Discover, rate, and favorite new routes</small>', true)}${button('editor', '<span class="menu-glyph">✦</span> Course workshop <small>Create, test, and publish your own</small>', true)}</div>
-    <div class="secondary-menu">${button('progress', 'My progress', true)}${button('awards', 'Achievements', true)}${button('settings', 'Settings', true)}${button('profile', session ? 'Player profile' : 'Create account', true)}${button('practice', 'Classic practice', true)}${button('show-title', 'Title screen', true)}</div></div>
+    <div class="secondary-menu">${button('progress', 'My progress', true)}${button('awards', 'Achievements', true)}${button('settings', 'Settings', true)}${button('profile', session ? 'Player profile' : 'Create account', true)}${button('show-title', 'Title screen', true)}</div></div>
     <p id="message" class="menu-note" role="status">${session ? `Welcome back, ${escape(session.user.user_metadata?.display_name || 'adventurer')}.` : 'Play as a guest, or sign in to keep your times and achievements.'} ${localBackend ? 'This preview uses a separate local database.' : ''}</p>`);
-  on('official', adventure); on('levels', levels); on('practice', () => play(practiceLevel, true)); on('settings', settings);
+  on('official', adventure); on('levels', levels); on('settings', settings);
   on('profile', () => session ? profile() : auth(true)); on('editor', editor); on('awards', awards); on('progress', progress); on('show-title', title);
 }
 function coursePicture(course: Level) {
-  const theme = course.layout.version===2 ? course.layout.theme : 'overworld';
+  const theme = course.layout.theme;
   return `<div class="course-preview ${theme}" aria-hidden="true"><span class="preview-cloud"></span><i></i><i></i><i></i><span class="player-icon"></span><b>⚑</b></div>`;
 }
 async function adventure() {
@@ -193,13 +196,13 @@ async function levels() {
     <div class="browse-controls"><label>Sort courses<select id="course-order"><option value="title">Title</option><option value="rating">Highest rating</option><option value="favorites">Most favorites</option></select></label>
     <label class="check-label"><input id="favorites-only" type="checkbox" ${session ? '' : 'disabled'}>My Favorites</label>${session ? '' : '<span class="small">Sign in to view your favorites.</span>'}</div>
     <p id="message" role="status" class="message">Loading online courses…</p><div id="courses" class="courses"></div>
-    <div class="actions">${button('reload', 'Retry online courses', true)}${button('practice', 'Local practice', true)}${button('back', 'Back to menu', true)}</div>`);
-  on('back', home); on('reload', levels); on('practice', () => play(practiceLevel, true));
+    <div class="actions">${button('reload', 'Retry online courses', true)}${button('adventure', 'Play adventure', true)}${button('back', 'Back to menu', true)}</div>`);
+  on('back', home); on('reload', levels); on('adventure', adventure);
   const order = document.getElementById('course-order') as HTMLSelectElement;
   const favorites = document.getElementById('favorites-only') as HTMLInputElement;
   order.value = browseOrder; favorites.checked = favoritesOnly;
   const stamp = revision;
-  if (!backend) { message('Online courses need Supabase setup. Local practice is available separately.', true); return; }
+  if (!backend) { message('Community courses need an online connection. The official adventure is available locally.', true); return; }
   try {
     const courses = await backend.catalog(session?.user.id); if (stamp !== revision) return;
     function render() {
@@ -285,7 +288,7 @@ async function awards() {
   on('back', home); on('refresh-awards', awards); const stamp = revision;
   try {
     const list = await backend.awards(session.user.id); if (stamp !== revision) return;
-    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${a.earned_at ? `Earned ${escape(new Date(a.earned_at).toLocaleDateString())}` : a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? (a.threshold_ms == null ? 'Complete the timed First Flight challenge.' : `Complete First Flight in under ${a.threshold_ms / 1000} seconds.`) : 'Complete a published course while signed in.'}</p></article>`).join('');
+    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${a.earned_at ? `Earned ${escape(new Date(a.earned_at).toLocaleDateString())}` : a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? (a.threshold_ms == null ? `Complete the timed ${escape(officialCourses[0].title)} challenge.` : `Complete ${escape(officialCourses[0].title)} in under ${a.threshold_ms / 1000} seconds.`) : 'Complete a published course while signed in.'}</p></article>`).join('');
     message(`${list.filter(a => a.earned_at).length} of ${list.length} achievements earned.`);
   } catch (error) { if (stamp === revision) message(errorText(error), true); }
 }
@@ -315,7 +318,7 @@ async function play(level: Level, local: boolean) {
   runCanLeave=()=>!save||!result||resultSaved||window.confirm('This result has not been confirmed saved. Leave this run?');
   const leave=(fn:()=>void|Promise<void>)=>navigate(fn);
   let soundMuted=false;try{soundMuted=localStorage.getItem('skystride.audio-muted.v1')==='1';}catch{}
-  const soundControl=document.getElementById('sound') as HTMLButtonElement;soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');soundControl.disabled=level.layout.version===1;
+  const soundControl=document.getElementById('sound') as HTMLButtonElement;soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');
   on('sound',()=>{if(currentGame&&'setMuted' in currentGame.scene){soundMuted=!soundMuted;currentGame.scene.setMuted(soundMuted);soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');try{if(localStorage.getItem('skystride.audio-muted.v1')!==(soundMuted?'1':'0'))message('Sound changed for this run, but the preference could not be saved.');}catch{message('Sound changed for this run, but browser storage is unavailable.');}}});
   on('fullscreen',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else message('Fullscreen is not available in this browser.');}catch{message('Fullscreen could not be opened. You can keep playing in this window.');}});
   on('pause',()=>currentGame?.scene.setPaused(!paused));on('retry',()=>leave(()=>play(level,local)));on('back',()=>leave(list));on('run-menu',()=>leave(home));on('details',()=>leave(()=>courseDetails(level)));

@@ -1,11 +1,11 @@
 import { afterAll,beforeAll,it,expect } from 'vitest';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
-import { practiceLevel, type Layout } from '../src/level';
+import { historicalCourse, seedHistoricalV1, type HistoricalLayout as Layout } from './fixtures/historical-v1';
 import { Backend } from '../src/backend';
 
 const db=new PGlite();
-const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',C='cccccccc-cccc-4ccc-8ccc-cccccccccccc',L=practiceLevel.id;
+const A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',C='cccccccc-cccc-4ccc-8ccc-cccccccccccc',L=historicalCourse.id;
 const migrationNames=['001_core.sql','002_trigger_privileges_and_indexes.sql','20261019144913_sprint3_progress_and_drafts.sql','20261109042116_sprint4_publishing_and_community.sql','20261109043347_sprint4_non_retrying_revision_conflicts.sql'];
 const sql=(name:string)=>readFileSync(new URL('../supabase/migrations/'+name,import.meta.url),'utf8');
 const setup=`create role anon;create role authenticated;create schema auth;
@@ -15,7 +15,7 @@ grant usage on schema auth to anon,authenticated;grant execute on function auth.
 const id=(n:number)=>`44444444-4444-4444-8444-${String(n).padStart(12,'0')}`;
 type RecordLevel={id:string;title:string;description:string;layout:Layout;revision:number;published:boolean;can_publish:boolean};
 async function role(name:string,user=''){await db.exec(`reset role;set role ${name};`);await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user]);}
-async function save(levelId:string,revision:number|null=null,title='Draft',layout=practiceLevel.layout):Promise<RecordLevel>{
+async function save(levelId:string,revision:number|null=null,title='Draft',layout=historicalCourse.layout):Promise<RecordLevel>{
  return (await db.query<{result:RecordLevel}>('select save_draft($1,$2,$3,$4,$5,$6) result',[levelId,revision,title,'Description','easy',layout])).rows[0].result;
 }
 async function startTest(levelId:string,revision=1){return (await db.query<{result:{id:string;level:RecordLevel}}>('select start_draft_playtest($1,$2) result',[levelId,revision])).rows[0].result;}
@@ -28,11 +28,11 @@ beforeAll(async()=>{
  await db.exec(setup);
  for(const name of migrationNames.slice(0,3))await db.exec(sql(name));
  await db.query('insert into auth.users values($1,$2),($3,$4),($5,$6)',[A,{display_name:'Player A'},B,{display_name:'Player B'},C,{display_name:'Player C'}]);
- await db.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ await seedHistoricalV1(db);
  // A renamed seed proves the timed achievement is tied to stable identity.
  await db.query("update levels set title='Renamed First Flight' where id=$1",[L]);
  await role('authenticated',A);
- legacyDraft=(await db.query<{id:string}>('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4) returning id',[A,'Legacy draft','easy',practiceLevel.layout])).rows[0].id;
+ legacyDraft=(await db.query<{id:string}>('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4) returning id',[A,'Legacy draft','easy',historicalCourse.layout])).rows[0].id;
  legacyAttempt=await attempt(A);
  await db.query('select complete_attempt($1,300,2)',[legacyAttempt]);
  await db.query('insert into ratings(user_id,level_id,score) values($1,$2,4)',[A,L]);
@@ -51,7 +51,7 @@ it('upgrades populated records without changing existing profiles, levels, attem
 });
 it('installs all migrations cleanly into a fresh database',async()=>{
  const fresh=new PGlite();try{await fresh.exec(setup);for(const name of migrationNames)await fresh.exec(sql(name));
- await fresh.exec(readFileSync(new URL('../supabase/seed.sql',import.meta.url),'utf8'));
+ await seedHistoricalV1(fresh);
  expect((await fresh.query('select revision from levels')).rows).toEqual([{revision:1}]);
  expect((await fresh.query('select * from draft_playtests')).rows).toEqual([]);
  }finally{await fresh.close();}
@@ -73,13 +73,13 @@ it('rejects invalid metadata and null/invalid expected revisions without deletin
  await expect(save(id(2),0)).rejects.toThrow(/revision/);
  await expect(save(id(2),1)).rejects.toThrow(/not found/);
  for(const [title,description,difficulty] of [['x'.repeat(61),'','easy'],['Valid','x'.repeat(281),'easy'],['Valid','','unknown']]){
-  await expect(db.query('select save_draft($1,null,$2,$3,$4,$5)',[id(2),title,description,difficulty,practiceLevel.layout])).rejects.toThrow();
+  await expect(db.query('select save_draft($1,null,$2,$3,$4,$5)',[id(2),title,description,difficulty,historicalCourse.layout])).rejects.toThrow();
  }
 });
 it('denies direct revision, publication, ownership and draft writes and forged playtest results',async()=>{
  await role('authenticated',A);
  for(const query of ["update levels set revision=99 where id=$1","update levels set published=true where id=$1","update levels set title='Bypassed' where id=$1","update levels set creator_id=null where id=$1"]){await expect(db.query(query,[id(1)])).rejects.toThrow();}
- await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Bypass','easy',practiceLevel.layout])).rejects.toThrow();
+ await expect(db.query('insert into levels(creator_id,title,difficulty,layout) values($1,$2,$3,$4)',[A,'Bypass','easy',historicalCourse.layout])).rejects.toThrow();
  await expect(db.query('insert into draft_playtests(user_id,level_id,revision) values($1,$2,2)',[A,id(1)])).rejects.toThrow();
  const test=await startTest(id(1),2);
  await expect(db.query('update draft_playtests set completed_at=now(),elapsed_ms=1,deaths=0 where id=$1',[test.id])).rejects.toThrow();
@@ -102,7 +102,7 @@ it('keeps private drafts and tests isolated across accounts and anonymous calls'
 it('requires completion of the current saved revision before publishing',async()=>{
  await role('authenticated',A);await save(id(3));
  await expect(publish(id(3))).rejects.toThrow(/Finish a playtest/);
- const test=await startTest(id(3));expect(test.level).toMatchObject({id:id(3),revision:1,layout:practiceLevel.layout});
+ const test=await startTest(id(3));expect(test.level).toMatchObject({id:id(3),revision:1,layout:historicalCourse.layout});
  await expect(publish(id(3))).rejects.toThrow(/Finish a playtest/);
  await completeTest(test.id);
  expect((await db.query<{r:RecordLevel}>('select owned_levels() r')).rows.find(x=>x.r.id===id(3))?.r.can_publish).toBe(true);
@@ -156,14 +156,14 @@ it('keeps publication immutable and creates independent unapproved copies',async
 });
 it('matches item geometry rules: unique in-bounds points outside platforms/hazards, airborne allowed',async()=>{
  await role('authenticated',A);
- const ground=practiceLevel.layout.platforms[0];
- for(const items of [[{x:-1,y:0}],[{x:24,y:1}],[{x:1,y:13}],[{x:1,y:1},{x:1,y:1}],[{x:ground.x,y:ground.y}],practiceLevel.layout.hazards.slice(0,1)]){
+ const ground=historicalCourse.layout.platforms[0];
+ for(const items of [[{x:-1,y:0}],[{x:24,y:1}],[{x:1,y:13}],[{x:1,y:1},{x:1,y:1}],[{x:ground.x,y:ground.y}],historicalCourse.layout.hazards.slice(0,1)]){
   expect(items.length).toBeGreaterThan(0);
-  await expect(save(id(8),null,'Invalid item',{...practiceLevel.layout,items})).rejects.toThrow();
+  await expect(save(id(8),null,'Invalid item',{...historicalCourse.layout,items})).rejects.toThrow();
  }
- expect((await save(id(8),null,'Airborne item',{...practiceLevel.layout,items:[{x:1,y:1}]})).layout.items).toEqual([{x:1,y:1}]);
+ expect((await save(id(8),null,'Airborne item',{...historicalCourse.layout,items:[{x:1,y:1}]})).layout.items).toEqual([{x:1,y:1}]);
  // JSON numbers with different formatting still describe the same tile.
- const equivalentNumbers=JSON.stringify({...practiceLevel.layout,items:[{x:1,y:1}]}).replace('"items":[{"x":1,"y":1}]','"items":[{"x":1,"y":1},{"x":1.0,"y":1.0}]');
+ const equivalentNumbers=JSON.stringify({...historicalCourse.layout,items:[{x:1,y:1}]}).replace('"items":[{"x":1,"y":1}]','"items":[{"x":1,"y":1},{"x":1.0,"y":1.0}]');
  await expect(db.query('select save_draft($1,null,$2,$3,$4,$5::jsonb)',[id(9),'Duplicate numbers','','easy',equivalentNumbers])).rejects.toThrow();
 });
 it('exposes public aggregate totals without exposing other players individual records',async()=>{

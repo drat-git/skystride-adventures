@@ -24,7 +24,7 @@ it('uses the actual SQL/RLS for private profiles, drafts and write denial',async
  unwrap(await a.from('profiles').update({display_name:'Local Renamed'}).eq('id',uidA));
  expect(unwrap(await a.from('profiles').select('display_name').eq('id',uidA).single()).display_name).toBe('Local Renamed');
  expect((await b.from('levels').update({official_order:1}).eq('id',courses[0].id)).error).toBeTruthy();
- expect(unwrap(await anon.from('levels').select('id,official_order').eq('published',true))).toHaveLength(7);
+ expect(unwrap(await anon.from('levels').select('id,official_order').eq('published',true))).toHaveLength(6);
 });
 const fields=()=>({p_id:draftId,p_expected_revision:null,p_title:'Local V2 test',p_description:'Fixture-owned test course',p_difficulty:'easy',p_layout:courses[0].layout});
 it('recovers a lost save response without creating duplicates and rejects stale or foreign changes',async()=>{
@@ -72,7 +72,7 @@ it('rejects external origins, forged tokens, arbitrary columns and admin HTTP ro
  expect((await fetch(server.url+'/rest/v1/levels',{headers:{apikey:LOCAL_PUBLIC_KEY,authorization:'Bearer '+tokenA+'forged'}})).status).toBe(401);
  expect((await fetch(server.url+'/admin',{headers:{apikey:LOCAL_PUBLIC_KEY}})).status).toBe(404);
  expect((await anon.from('levels').select('id;drop table levels')).error).toBeTruthy();
- expect(unwrap(await anon.from('levels').select('id'))).toHaveLength(8);
+ expect(unwrap(await anon.from('levels').select('id'))).toHaveLength(7);
 });
 it('allows real SDK browser preflights for read/write profile headers',async()=>{
  const headers=['apikey','authorization','content-type','accept-profile','content-profile','prefer','x-client-info','x-supabase-api-version','range','range-unit'];
@@ -97,7 +97,7 @@ it('persists SQL, hashed local credentials and sessions across server restarts',
   const response=await fetch(second.url+'/auth/v1/user',{headers:{apikey:LOCAL_PUBLIC_KEY,authorization:'Bearer '+registered.session.access_token}});expect(response.status).toBe(200);
   const restored=client(second.url);expect(unwrap(await restored.auth.signInWithPassword({email:'persist@example.test',password})).user.id).toBe(registered.user.id);
   expect(unwrap(await restored.from('profiles').select('display_name').eq('id',registered.user.id).single()).display_name).toBe('Persistent');
-  expect((await second.admin('select count(*)::int count from local_dev.migrations'))[0].count).toBe(8);
+  expect((await second.admin('select count(*)::int count from local_dev.migrations'))[0].count).toBe(9);
   await restored.auth.signOut();
  }finally{await first?.close();await second?.close();await rm(directory,{recursive:true,force:true});}
 },30000);

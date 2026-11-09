@@ -13,16 +13,15 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "test:browser": "node scripts/test-overhaul-browser.mjs",
-    "test:integration": "node --env-file=.env.local scripts/integration.mjs",
-    "test:live": "node --env-file=.env.local scripts/test-sprint4-live.mjs",
-    "test:hosted": "node --env-file=.env.local scripts/test-sprint4-hosted-browser.mjs",
+    "test:hosted": "node --env-file=.env.local scripts/test-overhaul-hosted.mjs",
     "dev:vite": "vite --host 127.0.0.1",
     "test:editor": "node scripts/test-overhaul-editor.mjs",
     "test:runtime": "node scripts/test-overhaul-runtime.mjs",
     "test:courses:ground": "node scripts/test-overhaul-official-ground.mjs",
     "test:courses:sky": "node scripts/test-overhaul-sky.mjs",
     "test:courses:final": "node scripts/test-overhaul-official-sky6.mjs",
-    "test:production": "node scripts/test-overhaul-production.mjs"
+    "test:production": "node scripts/test-overhaul-production.mjs",
+    "test:title": "node scripts/test-title-navigation.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",

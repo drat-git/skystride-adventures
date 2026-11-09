@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { practiceLevel } from '../src/level';
 import { validateLayoutV2 } from '../src/course-format';
-import { DEFAULT_PROPERTIES, EDITOR_TOOLS, convertLegacyLayout, describeCell, newEditorLayout, placeComponent, replaceSelection, resizeCourse, selectionsAt, type V2Tool } from '../src/editor-tools';
+import { DEFAULT_PROPERTIES, EDITOR_TOOLS, describeCell, newEditorLayout, placeComponent, replaceSelection, resizeCourse, selectionsAt, type V2Tool } from '../src/editor-tools';
 
 describe('V2 editor course data', () => {
-  it('creates independently valid drafts and converts legacy topology without changing the original', () => {
-    const draft = newEditorLayout(); expect(() => validateLayoutV2(draft)).not.toThrow();
-    const before = structuredClone(practiceLevel.layout), converted = convertLegacyLayout(practiceLevel.layout);
-    expect(() => validateLayoutV2(converted)).not.toThrow();
-    expect(converted.start).toEqual({ x: before.start.x, y: before.start.y + 11 });
-    expect(converted.platforms.map(p => p.width)).toEqual(before.platforms.map(p => p.width));
-    expect(practiceLevel.layout).toEqual(before);
+  it('creates independently valid drafts without shared mutable components', () => {
+    const draft = newEditorLayout(), another = newEditorLayout();
+    expect(() => validateLayoutV2(draft)).not.toThrow();
+    draft.items.push({ x: 8, y: 20 });
+    draft.terrain[0].width = 30;
+    expect(another.items).toEqual([]);
+    expect(another.terrain[0].width).toBe(64);
   });
 
   it.each<V2Tool>(['terrain', 'platform', 'solid', 'breakable', 'glow', 'hidden', 'item', 'powerup', 'hazard', 'enemy', 'moving-platform', 'obstacle', 'decoration'])('places and serializes the %s component using the actual format validator', tool => {
