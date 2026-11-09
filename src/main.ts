@@ -315,8 +315,9 @@ async function leaderboard(level: Level, mode: 'time'|'score' = 'time') {
 async function play(level: Level, local: boolean) {
   screen = 'play'; const save = !local && !!session && !!backend;
   shell(escape(level.title), `<div class="play-topline"><span class="badge">${level.officialOrder ? `LEVEL ${level.officialOrder} / 6` : 'COMMUNITY'} · ${themeName(level)}</span><div class="play-options">${button('sound','Sound on',true)}${button('fullscreen','Fullscreen',true)}${button('pause','Pause',true)}</div></div>
-    <div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div></div></div></div>
+    <div id="play-stage" class="play-stage"><div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div></div></div></div>
     <div id="run-hud" class="run-hud" aria-label="Run statistics"><span>COINS <b id="hud-coins">0 / ${level.layout.items.length+level.layout.blocks.filter(b=>b.content==='coin').length}</b></span><span>TIME ELAPSED <b id="hud-elapsed">0.0 s</b><small>Fastest completion<br><span id="hud-fastest">${save?'Loading…':'Not completed'}</span></small></span><span>POWER <b id="hud-power">SMALL</b></span><span>TIME LIMIT <b id="hud-time">${level.layout.timeLimit} s</b><small>remaining of ${level.layout.timeLimit} s</small></span><span>SCORE <b id="hud-score">0</b></span></div>
+    <div class="fullscreen-controls">${button('fullscreen-pause','Pause',true)}${button('exit-fullscreen','Exit fullscreen',true)}</div></div>
     <div class="touch-controls" aria-label="Touch game controls"><div><button data-control="left" aria-label="Move left">◀</button><button data-control="right" aria-label="Move right">▶</button></div><div><button data-control="fire" aria-label="Throw fireball">FIRE</button><button data-control="jump" aria-label="Jump">JUMP</button></div></div>
     <p id="message" class="message" role="status">${save ? 'Starting your account attempt…' : 'Guest practice · This run is not saved to an account.'}</p>
     <div class="actions run-actions">${button('retry','Restart course',true)}<button id="save-result" hidden>Retry saving result</button>${local?'':button('details','Course details',true)}${button('back','Level list',true)}${button('run-menu','Main menu',true)}</div>
@@ -333,12 +334,15 @@ async function play(level: Level, local: boolean) {
   let soundMuted=false;try{soundMuted=localStorage.getItem('skystride.audio-muted.v1')==='1';}catch{}
   const soundControl=document.getElementById('sound') as HTMLButtonElement;soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');
   on('sound',()=>{if(currentGame&&'setMuted' in currentGame.scene){soundMuted=!soundMuted;currentGame.scene.setMuted(soundMuted);soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');try{if(localStorage.getItem('skystride.audio-muted.v1')!==(soundMuted?'1':'0'))message('Sound changed for this run, but the preference could not be saved.');}catch{message('Sound changed for this run, but browser storage is unavailable.');}}});
-  on('fullscreen',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else message('Fullscreen is not available in this browser.');}catch{message('Fullscreen could not be opened. You can keep playing in this window.');}});
-  on('pause',()=>currentGame?.scene.setPaused(!paused));on('retry',()=>leave(()=>play(level,local)));on('back',()=>leave(list));on('run-menu',()=>leave(home));on('details',()=>leave(()=>courseDetails(level)));
+  const stage=document.getElementById('play-stage')!;
+  const toggleFullscreen=async()=>{try{if(document.fullscreenElement===stage)await document.exitFullscreen();else if(stage.requestFullscreen)await stage.requestFullscreen();else message('Fullscreen is not available in this browser.');}catch{if(stamp===revision)message('Fullscreen could not be opened. You can keep playing in this window.');}};
+  on('fullscreen',toggleFullscreen);on('exit-fullscreen',toggleFullscreen);
+  const togglePause=()=>currentGame?.scene.setPaused(!paused);
+  on('pause',togglePause);on('fullscreen-pause',togglePause);on('retry',()=>leave(()=>play(level,local)));on('back',()=>leave(list));on('run-menu',()=>leave(home));on('details',()=>leave(()=>courseDetails(level)));
   const overlay=(state:RunState)=>{
     if(stamp!==revision)return; paused=state.status==='paused';
-    const pause=document.getElementById('pause') as HTMLButtonElement;
-    pause.textContent=paused?'Resume':'Pause';pause.disabled=state.status==='complete'||state.status==='dead';
+    for(const id of ['pause','fullscreen-pause']){const pause=document.getElementById(id) as HTMLButtonElement;
+      pause.textContent=paused?'Resume':'Pause';pause.disabled=state.status==='complete'||state.status==='dead';}
     const panel=document.getElementById('run-overlay')!;panel.hidden=state.status==='playing';
     if(panel.hidden)return;
     const complete=state.status==='complete', dead=state.status==='dead';
@@ -364,8 +368,10 @@ async function play(level: Level, local: boolean) {
   };
   on('save-result',persist);
   const escapeKey=(event:KeyboardEvent)=>{if(event.code==='Escape'&&!event.repeat&&!(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement||event.target instanceof HTMLSelectElement)){event.preventDefault();currentGame?.scene.setPaused(!paused);}};
-  const fullscreenChanged=()=>{const control=document.getElementById('fullscreen');if(control)control.textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen';};
-  document.addEventListener('keydown',escapeKey);document.addEventListener('fullscreenchange',fullscreenChanged);fullscreenChanged();screenCleanup=()=>{document.removeEventListener('keydown',escapeKey);document.removeEventListener('fullscreenchange',fullscreenChanged);};
+  let fullscreenFrame=0;
+  const fullscreenChanged=()=>{const control=document.getElementById('fullscreen');if(control)control.textContent=document.fullscreenElement===stage?'Exit fullscreen':'Fullscreen';
+    cancelAnimationFrame(fullscreenFrame);fullscreenFrame=requestAnimationFrame(()=>{if(stamp!==revision)return;currentGame?.game.scale.refresh();if(document.getElementById('run-overlay')?.hidden)document.getElementById('game')?.focus({preventScroll:true});else stage.querySelector<HTMLButtonElement>('#overlay-actions button')?.focus({preventScroll:true});});};
+  document.addEventListener('keydown',escapeKey);document.addEventListener('fullscreenchange',fullscreenChanged);fullscreenChanged();screenCleanup=()=>{cancelAnimationFrame(fullscreenFrame);document.removeEventListener('keydown',escapeKey);document.removeEventListener('fullscreenchange',fullscreenChanged);};
   try{
     if(save){attemptId=await backend!.startAttempt(uid!,level.id);if(stamp!==revision)return;message('Reach the flag. Your completed result will be saved.');}
     currentGame=mountGame(document.getElementById('game')!,level,completed=>{
