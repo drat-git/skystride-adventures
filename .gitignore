@@ -6,4 +6,5 @@ dist/
 .DS_Store
 docs/evidence/private/
 output/
+supabase/.temp/
 Sprint_2_New_Project_Handoff.md

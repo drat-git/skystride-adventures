@@ -18,6 +18,9 @@ export function validateLayout(v: unknown): asserts v is Layout {
   const platforms = v.platforms as Platform[];
   const blocked = (p: Point) => platforms.some(t => t.y === p.y && p.x >= t.x && p.x < t.x + t.width);
   const hazards = v.hazards as Point[];
+  for (const p of v.items as Point[]) {
+    if (blocked(p) || hazards.some(h => h.x === p.x && h.y === p.y)) throw new Error('Items cannot overlap platforms or hazards.');
+  }
   for (const p of [v.start, v.finish, ...(v.checkpoints as Point[])]) {
     if (blocked(p) || hazards.some(h => h.x === p.x && h.y === p.y)) throw new Error('Start, finish and checkpoint positions must be safe.');
     if (!platforms.some(t => t.y === p.y + 1 && p.x >= t.x && p.x < t.x + t.width)) throw new Error('Start, finish and checkpoints need a supporting platform.');

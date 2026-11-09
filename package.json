@@ -12,7 +12,10 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
-    "test:integration": "node --env-file=.env.local scripts/integration.mjs"
+    "test:browser": "node scripts/test-sprint4-browser.mjs",
+    "test:integration": "node --env-file=.env.local scripts/integration.mjs",
+    "test:live": "node --env-file=.env.local scripts/test-sprint4-live.mjs",
+    "test:hosted": "node --env-file=.env.local scripts/test-sprint4-hosted-browser.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
