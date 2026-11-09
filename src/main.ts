@@ -53,7 +53,7 @@ function shell(title: string, body: string) {
 }
 function title() {
   screen = 'title'; clearScreen(); root.className = 'screen-title';
-  root.innerHTML = `<main class="title-screen"><div id="title-demo" class="title-demo" aria-hidden="true"></div><div class="title-copy"><p class="eyebrow">A LITTLE COURAGE. A WELL-TIMED JUMP.</p><h1>SKYSTRIDE<span>ADVENTURES</span></h1><button id="enter-menu" class="start-prompt">PRESS ANY KEY <span>or tap to start</span></button></div></main>`;
+  root.innerHTML = `<main class="title-screen"><div id="title-demo" class="title-demo" aria-hidden="true"></div><div class="title-copy"><h1>SKYSTRIDE<span>ADVENTURES</span></h1><button id="enter-menu" class="start-prompt">PRESS ANY KEY <span>or tap to start</span></button></div></main>`;
   const titleSurface = root.querySelector<HTMLElement>('.title-screen')!;
   currentGame = mountGame(document.getElementById('title-demo')!, titleCourse(), () => {}, {demo:true});
   let activationKey: string | undefined;

@@ -83,7 +83,7 @@ The user subsequently requested removal of V1 courses, layouts and frontend supp
 
 The app now accepts V2 only. Removed code includes the legacy scene, V1 geometry/constants/practice layout, editor conversion/paint paths, Classic practice routes and obsolete seed/integration/browser scripts. Historical SQL migrations and isolated migration-test fixtures remain to verify reproducible upgrades. The local persistent database was copied before applying the same cleanup.
 
-The Title screen button previously installed an activation listener on the persistent root while its own click was still bubbling; that same click immediately reopened the menu. Activation now belongs to the newly created title subtree. The demo retains actual running, jumping and looping, but contains no coins or bottom caption.
+The Title screen button previously installed an activation listener on the persistent root while its own click was still bubbling; that same click immediately reopened the menu. Activation now belongs to the newly created title subtree. The demo retains actual running, jumping and looping, but contains no coins, upper tagline or bottom caption.
 
 Verification: **223 tests across 14 files**, TypeScript, **13 full local browser groups**, **8 editor groups**, **6 focused title groups**, and production asset/base-path checks pass. Title checks cover pointer and keyboard returns, repeated transitions with one canvas, running/jumping/looping, zero coins/footer and reduced-motion behavior. Retirement tests cover preservation, cascade scope, V1 rejection, timed-rule identity/threshold, fresh setup and transactional rollback when the V2 replacement is missing.
 

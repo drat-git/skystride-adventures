@@ -22,6 +22,7 @@ async function titleReady() {
   await page.waitForFunction(() => window.__SKYSTRIDE_SNAPSHOT__?.()?.ready);
   assert.equal(await page.locator('#official').count(), 0);
   assert.equal(await page.locator('.title-foot').count(), 0);
+  assert.equal(await page.locator('.title-copy .eyebrow').count(), 0);
   assert.equal(await page.getByText('SIX WORLDS ABOVE THE ORDINARY', { exact: true }).count(), 0);
   assert.equal((await page.evaluate(() => window.__SKYSTRIDE_SNAPSHOT__())).attempt.totalItems, 0);
 }
