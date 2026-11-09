@@ -1,7 +1,7 @@
 // Actual keyboard/browser -> real Supabase Auth/PostgREST. No fixtures or intercepted requests.
 // Run with node --env-file=.env.local and PLAYWRIGHT_MODULE / CHROME_PATH when external runtimes are needed.
 // BASE_URL=local starts Vite on 127.0.0.1:5185 using the real project configuration.
-// Every run creates one new published course; existing courses and interaction records are preserved.
+// Normal runs create one published course; FIRST_FLIGHT_ONLY=1 preserves prior evidence and resumes its final check.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +14,7 @@ const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const local = process.env.BASE_URL === 'local';
 const baseURL = local ? 'http://127.0.0.1:5185' : process.env.BASE_URL || 'https://drat-git.github.io/skystride-adventures/';
 const output = `output/sprint4/hosted-evidence/${local ? 'local' : 'public'}`;
+const firstFlightOnly = process.env.FIRST_FLIGHT_ONLY === '1';
 await mkdir(output, { recursive: true });
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 let title = `Cloudline Crossing ${stamp} ${randomUUID().slice(0, 4)}`;
@@ -21,9 +22,21 @@ const checks = [], screenshots = [], pageErrors = [], httpFailures = [];
 const accounts = { A: { email: process.env.TEST_EMAIL_A, password: process.env.TEST_PASSWORD_A }, B: { email: process.env.TEST_EMAIL_B, password: process.env.TEST_PASSWORD_B } };
 const secrets = [...Object.values(accounts).flatMap(account => [account.email, account.password]), process.env.VITE_SUPABASE_PUBLISHABLE_KEY].filter(Boolean);
 const sanitize = value => secrets.reduce((text, secret) => text.split(secret).join('[redacted]'), String(value));
-let browser, server, pageA, pageB, courseId = process.env.RESUME_COURSE_ID, passed = false, failure;
-if (process.env.RESUME_COURSE_ID) {
-  try { await writeFile(`${output}/previous-attempt-${stamp}.json`, await readFile(`${output}/results.json`, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+let browser, server, pageA, pageB, courseId = process.env.RESUME_COURSE_ID, passed = false, failure, previous, previousArchive, firstFlightResult;
+if (process.env.RESUME_COURSE_ID || firstFlightOnly) {
+  try {
+    const saved = await readFile(`${output}/results.json`, 'utf8');
+    previousArchive = `${output}/previous-attempt-${stamp}.json`;
+    await writeFile(previousArchive, saved);
+    if (firstFlightOnly) {
+      previous = JSON.parse(saved);
+      assert.equal(previous.baseURL, baseURL, 'Continuation must use the same hosted URL as its original journey.');
+      assert.ok(previous.createdCourse?.id && previous.checks?.length >= 7, 'Complete the course/community journey before FIRST_FLIGHT_ONLY.');
+      courseId = previous.createdCourse.id; title = previous.createdCourse.title;
+      checks.push(...previous.checks); screenshots.push(...previous.screenshots);
+      pageErrors.push(...previous.pageErrors); httpFailures.push(...previous.httpFailures);
+    }
+  } catch (error) { if (firstFlightOnly || error.code !== 'ENOENT') throw error; }
 }
 const record = name => { checks.push({ name, verifiedAt: new Date().toISOString() }); console.log('PASS', name); };
 const waitMessage = (page, text, selector = '#message') => page.locator(selector).filter({ hasText: text }).waitFor({ timeout: 30000 });
@@ -140,41 +153,83 @@ async function firstFlight(page) {
       return { x: (left + right + 1) / 2 * 768 / bitmap.width, y: (top + bottom + 1) / 2 * 448 / bitmap.height };
     }, encoded);
   };
+  const pause = page.locator('#pause');
+  let heldDirection;
+  const togglePause = async label => {
+    if (await pause.isDisabled() || (await pause.innerText()) !== label) return;
+    try { await pause.click({ timeout: 1500 }); }
+    catch (error) { if (await pause.isEnabled()) throw error; }
+  };
+  const freeze = async () => {
+    if (heldDirection) { await page.keyboard.up(heldDirection); heldDirection = undefined; }
+    await page.keyboard.up('Space');
+    await togglePause('Pause');
+  };
+  const resume = async () => {
+    await togglePause('Resume');
+    await page.locator('#game').focus();
+  };
+  const burst = async (milliseconds, jump = false, direction = 'ArrowRight') => {
+    await resume();
+    heldDirection = direction; await page.keyboard.down(direction);
+    if (jump) await page.keyboard.down('Space');
+    try { await page.waitForTimeout(milliseconds); } finally { await freeze(); }
+  };
+  await freeze();
   const approach = async target => {
     for (let n = 0; n < 24; n++) {
-      const point = await position(); if (point.x >= target - 2) return;
-      await page.keyboard.down('ArrowRight');
-      await page.waitForTimeout(Math.max(16, Math.min(350, (target - point.x) / 210 * 1000)));
-      await page.keyboard.up('ArrowRight');
+      const point = await position();
+      if (Math.abs(point.x - target) <= 3) return;
+      assert.ok(point.x < target + 20, `Keyboard movement overshot approach ${target}; observed ${point.x.toFixed(1)}.`);
+      const distance = Math.abs(target - point.x);
+      await burst(Math.max(16, Math.min(200, (distance - 3) / 210 * 1000)), false, point.x < target ? 'ArrowRight' : 'ArrowLeft');
     }
     throw Error(`Keyboard movement did not reach approach position ${target}.`);
   };
   const jumpAcross = async (start, clear) => {
     await approach(start);
-    await page.keyboard.down('ArrowRight'); await page.keyboard.down('Space');
-    try {
-      await page.waitForTimeout(100); await page.keyboard.up('Space');
-      for (let n = 0; n < 18; n++) {
-        const point = await position();
-        if (point.x >= clear) return;
-        assert.ok(point.x >= start - 10, 'First Flight player respawned; the keyboard jump did not clear its hazard.');
-      }
-      throw Error('First Flight keyboard jump did not reach the far side of its hazard.');
-    } finally { await page.keyboard.up('Space'); await page.keyboard.up('ArrowRight'); }
+    // Use the visible pause control while observing. Pauses freeze observation delays and release every held key.
+    for (let n = 0; n < 10; n++) {
+      if ((await position()).y >= 368) break;
+      await resume(); await page.waitForTimeout(150); await freeze();
+    }
+    assert.ok((await position()).y >= 368, 'Player did not settle on its supporting platform before jumping.');
+    await burst(120, true);
+    for (let n = 0; n < 24; n++) {
+      const point = await position();
+      if (point.x >= clear) return;
+      assert.ok(point.x >= start - 10, 'First Flight player respawned; the keyboard jump did not clear its hazard.');
+      await burst(80);
+    }
+    throw Error('First Flight keyboard jump did not reach the far side of its hazard.');
   };
   await jumpAcross(203, 280); await jumpAcross(415, 545); await jumpAcross(587, 680);
+  await resume();
   await page.keyboard.down('ArrowRight');
   try { await waitMessage(page, 'Result saved!'); } finally { await page.keyboard.up('ArrowRight'); }
   await shot(page, 'first-flight-keyboard-completion');
-  record('First Flight completed through actual keyboard movement and three jumps; real result saved');
+  firstFlightResult = await page.locator('#message').innerText();
+  record('First Flight completed through actual keyboard movement and three jumps, with Pause/Resume between screenshot observations; real result saved');
 }
 
 try {
   if (local) { server = await createServer({ server: { host: '127.0.0.1', port: 5185, strictPort: true } }); await server.listen(); }
   browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
-  pageA = await newPage(); pageB = await newPage();
+  pageA = await newPage();
   const nameA = await login(pageA, 'A');
-  record('Account A signs in through real Supabase Auth and loads its profile');
+  record(firstFlightOnly ? 'Account A signs in again to continue the final public First Flight check' : 'Account A signs in through real Supabase Auth and loads its profile');
+
+  if (firstFlightOnly) {
+    await firstFlight(pageA);
+    await pageA.locator('#brand').click(); await pageA.getByRole('button', { name: 'Achievements', exact: true }).click();
+    await waitMessage(pageA, 'achievements earned.');
+    for (const name of ['First finish', 'Course creator', 'First Flight under 30 seconds']) await earned(pageA, name);
+    await shot(pageA, 'a-all-achievements');
+    record('Account A has all three achievements after real creation and keyboard completions');
+    assert.deepEqual(pageErrors, [], 'Browser runtime errors occurred.');
+    passed = true;
+  } else {
+  pageB = await newPage();
 
   await openEditor(pageA);
   if (courseId) {
@@ -288,18 +343,22 @@ try {
   await shot(pageA, 'two-account-leaderboard');
   assert.deepEqual(pageErrors, [], 'Browser runtime errors occurred.');
   passed = true;
+  }
 } catch (error) {
   failure = sanitize(error?.stack || error);
   for (const [page, label] of [[pageA, 'a'], [pageB, 'b']]) {
-    if (page && !page.isClosed()) await shot(page, `${label}-failure`).catch(() => {});
+    if (page && !page.isClosed()) await shot(page, `${label}-failure${firstFlightOnly ? `-${stamp}` : ''}`).catch(() => {});
   }
   console.error(failure);
   process.exitCode = 1;
 } finally {
   await writeFile(`${output}/results.json`, JSON.stringify({
     verifiedAt: new Date().toISOString(), passed, baseURL, environment: 'Real browser, Supabase Auth and PostgREST; no fixture routing',
-    registrationConfirmation: 'Not tested by this script. Existing dedicated-account login is verified separately from email-confirmation evidence.',
-    createdCourse: courseId ? { id: courseId, title, resumed: !!process.env.RESUME_COURSE_ID } : null, checks, screenshots, pageErrors, httpFailures, ...(failure ? { failure } : {}),
+    registrationConfirmation: previous?.registrationConfirmation ?? 'Not tested by this script. Existing dedicated-account login is verified separately from email-confirmation evidence.',
+    createdCourse: previous?.createdCourse ?? (courseId ? { id: courseId, title, resumed: !!process.env.RESUME_COURSE_ID } : null),
+    checks, screenshots, pageErrors, httpFailures, ...(firstFlightResult ? { firstFlightResult } : {}),
+    ...(firstFlightOnly ? { continuations: [...(previous.continuations ?? []), { verifiedAt: new Date().toISOString(), scope: 'First Flight and all three achievements only; original course/community checks preserved', previousEvidence: previousArchive, passed }] } : {}),
+    ...(failure ? { failure } : {}),
   }, null, 2));
   await browser?.close(); await server?.close();
 }

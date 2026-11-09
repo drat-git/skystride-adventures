@@ -214,7 +214,7 @@ async function awards() {
   on('back', home); on('refresh-awards', awards); const stamp = revision;
   try {
     const list = await backend.awards(session.user.id); if (stamp !== revision) return;
-    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${a.earned_at ? `Earned ${escape(new Date(a.earned_at).toLocaleDateString())}` : a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? `Complete First Flight in under ${(a.threshold_ms ?? 30000) / 1000} seconds.` : 'Complete a published course while signed in.'}</p></article>`).join('');
+    document.getElementById('awards')!.innerHTML = list.map(a => `<article class="course course-body"><span class="badge">${a.earned_at ? 'EARNED' : 'LOCKED'}</span><h2>${escape(a.name)}</h2><p>${a.earned_at ? `Earned ${escape(new Date(a.earned_at).toLocaleDateString())}` : a.rule === 'first_created_level' ? 'Save your first private draft.' : a.rule === 'timed_course' ? (a.threshold_ms == null ? 'Complete the timed First Flight challenge.' : `Complete First Flight in under ${a.threshold_ms / 1000} seconds.`) : 'Complete a published course while signed in.'}</p></article>`).join('');
     message(`${list.filter(a => a.earned_at).length} of ${list.length} achievements earned.`);
   } catch (error) { if (stamp === revision) message(errorText(error), true); }
 }
