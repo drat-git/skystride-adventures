@@ -2,6 +2,8 @@
 
 The portable x64 Windows build is separate from the Apple Silicon Mac app and the GitHub Pages website. It bundles the same desktop frontend and connects to the existing hosted services through the existing desktop endpoint. No backend or website deployment is needed.
 
+Download the [Windows x64 ZIP from GitHub Releases](https://github.com/drat-git/skystride-adventures/releases/download/v0.2.0/SkyStride-Adventures-windows-x64.zip). See the [release guide](RELEASES.md) for checksums and installation notes. Choose this named ZIP, not GitHub's automatic source-code archive. The backup was built at source revision `708435d` using Electron 45.2.3.
+
 Share `output/windows/SkyStride-Adventures-windows-x64.zip`. On Windows, extract the **entire ZIP**, open the extracted **SkyStride Adventures** folder and run **SkyStride Adventures.exe**. Keep the EXE, DLLs, resources and other included files together. There is no installer, and Node/npm are not needed. Close the window or use **File → Quit** to exit.
 
 Use an existing SkyStride account for online features. The app has its own saved login session and device settings. Internet is required for authentication, cloud persistence, community features and AI; guest play of the six bundled official courses is available offline.

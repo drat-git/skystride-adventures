@@ -1,3 +1,5 @@
+> **Historical record:** This file preserves earlier sprint evidence and requirements. Current V2 behavior, real AI, account policy and desktop downloads are documented in the [documentation index](README.md) and [current verification history](OVERHAUL_VERIFICATION.md). Older pending items and placeholder descriptions below are not the current release status.
+
 # Sprint 2 source review and completion checklist
 
 Reviewed October 4, 2026: handoff; Technology Requirements; Sprint 1 and Sprint 2 assignments; generic SWE Sprint 1 template; Group 9 draft including all 10 comments and 3 images; all pages of ContextDiagram (10), ActivityDiagram (7), DatabaseFundamentals (37), System Modeling (78); planning example and instructor-feedback screenshot.

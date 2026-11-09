@@ -1,6 +1,6 @@
 # SkyStride V2 development
 
-The active specification is the unchanged `output/overhaul/sources/overhaul-plan.rtf` (original `/Users/Darsh/Downloads/overhaul-plan.rtf`). Its readable extraction and source index live beside it. Reread that specification after context compaction. The earlier audit-results plan is paused. Report generation, presentation work, and real AI integration are outside this overhaul.
+The active specification is the unchanged `output/overhaul/sources/overhaul-plan.rtf` (original `/Users/Darsh/Downloads/overhaul-plan.rtf`). Its readable extraction and source index live beside it. Reread that specification after context compaction. The earlier audit-results plan is paused. Report generation and presentation work remain separate. Real AI was implemented after the original overhaul; current endpoints, desktop delivery and verification are documented in [AI.md](AI.md), [RELEASES.md](RELEASES.md), and [OVERHAUL_VERIFICATION.md](OVERHAUL_VERIFICATION.md).
 
 Development branch: `codex/skystride-game-overhaul`, based on `be87f686d6418706399e32dacb10dd2f72a2ee8c`. The user subsequently authorized production migration and promotion to `main`; implementation commit `6deb86b` was deployed on 9 November 2026. The pre-existing dirty report work was archived in `output/overhaul/baseline-working-tree.zip` and `baseline.patch`; it is not part of this change.
 
@@ -27,7 +27,7 @@ Feature inventory and new entry points:
 | Unsaved-change prompts, revision conflicts, account isolation | Workshop lifecycle |
 | Checkpoints, optional collectibles, pause, restart | Shared course runtime |
 | Reduced decorative motion | Settings |
-| Disabled AI hint and feedback placeholders | Play controls / Workshop |
+| Live AI hints and editor feedback | Pause overlay / Course Maker; authenticated web and desktop endpoints |
 | V1 course compatibility | Retired by explicit user request after V2 release; the later account reset is recorded below |
 
 ## Reference fidelity and course provenance
@@ -53,7 +53,7 @@ DS reference map, inspected directly: <https://www.mariouniverse.com/wp-content/
 
 The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. The subsequent user-authorized retirement removed V1 course-owned records while preserving accounts, earned awards and all V2 records at that stage; a later explicit account reset removed user-owned data as recorded below. The public backend configuration in `.env.local` remains; obsolete test-account credentials were removed. Local development overrides the URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
 
-The existing eight tables remain. V2 expands the declarative `levels.layout` JSON, replaces the fixed-V1 validation constraints with a V1/V2 dispatcher, and adds server-owned `official_order`. Existing save, playtest, publication, community, and completion contracts remain. Progress is aggregated from existing completed attempts; no duplicate progress table is introduced.
+The existing eight public tables remain; a later AI migration adds private quota counters. V2 expands the declarative `levels.layout` JSON and adds server-owned `official_order`. Its initial compatibility dispatcher was subsequently replaced with V2-only validation during the authorized V1 retirement. Existing save, playtest, publication, community, and completion contracts remain. Progress is aggregated from existing completed attempts; no duplicate progress table is introduced.
 
 Local testing runs the real Postgres schema, functions, triggers, constraints, and row-level policies in PGlite. The local HTTP/Auth adapter is a development fixture, not the hosted Supabase Auth/PostgREST service. It sends no emails and uses separate local credentials. Hosted registration also requires no email verification; an immediate authenticated session and managed API behavior must be verified separately from the local fixture.
 

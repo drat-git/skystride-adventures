@@ -2,9 +2,11 @@
 
 Run `npm run dev` from the project root. It starts the game on `http://127.0.0.1:5186` and its isolated development API on `http://127.0.0.1:5187`. `LOCAL_GAME_PORT` and `LOCAL_BACKEND_PORT` can select other available ports.
 
-The launcher supplies the local API URL, public fixture key and `VITE_BACKEND_MODE=local` before starting Vite. It does not edit `.env.local` or contact the hosted Supabase project. Development builds also reject inherited hosted URLs unless `VITE_ALLOW_HOSTED_DEV=true` is explicitly supplied; the local launcher always disables that opt-in. Production configuration remains available for the later verified cutover.
+The launcher supplies the local API URL, public fixture key and `VITE_BACKEND_MODE=local` before starting Vite. It does not edit `.env.local` or contact the hosted Supabase project. Development builds also reject inherited hosted URLs unless `VITE_ALLOW_HOSTED_DEV=true` is explicitly supplied; the local launcher always disables that opt-in. The released web and desktop clients use their separate production builds and the hosted project.
 
 The local service runs the real migrations and row-level-security policies in PostgreSQL/PGlite. Authentication and the HTTP REST/RPC translation are development fixtures, not managed Supabase Auth or PostgREST. Local registration immediately creates a confirmed fixture session and profile; no confirmation emails are sent. Use dedicated local credentials. The UI identifies this environment as local development.
+
+Use Node 24 and `npm ci` before starting. The local fixture enforces the same new-password rule as signup: 8–128 characters, uppercase/lowercase letters, a number and an ASCII punctuation symbol. Local AI returns an unavailable explanation; it never calls a paid provider. [Desktop packaging](RELEASES.md#rebuild-and-publish) is separate from this local API and needs the production public Supabase URL/key.
 
 `output/overhaul/local-db/` contains the persistent database, a migration checksum ledger and `local-auth.json`. Passwords use per-account random salts and scrypt hashes. Random session and refresh tokens are persisted in the same ignored auth file with mode `0600`; the parent directory has mode `0700`. Local authentication uses a separate browser-storage key from hosted Supabase sessions. Keep the ignored local data out of version control.
 

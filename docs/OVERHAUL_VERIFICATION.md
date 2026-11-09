@@ -1,4 +1,4 @@
-# V2 desktop verification — 9 November 2026
+# V2 verification history — 9 November 2026
 
 Branch: `codex/skystride-game-overhaul`. Starting commit: `be87f686d6418706399e32dacb10dd2f72a2ee8c`. The active specification is retained unchanged at `output/overhaul/sources/overhaul-plan.rtf`. The earlier audit plan is paused. Pre-existing report changes remain untouched and outside the overhaul commit.
 
@@ -112,3 +112,16 @@ Hosted migration `20261109091634` corresponds to local `20261109090945_ai_usage_
 Immediately before/after migration, checksums matched for all original accounts, profiles, courses, attempts, awards, ratings and favorites. The disposable verification account, its draft/run/award/counters/sessions and local credential file were removed. At final cleanup, both original accounts and all9 courses remained. An existing player independently signed in and completed one run during verification, adding4 awards; the original49 attempts and3 awards still match their exact baseline checksums. Original profile/course/interaction checksums also match. No report files were edited.
 
 Evidence: `output/ai/{tests.log,focused-tests.log,build.log,regression-browser.log,hosted-api.json,migration-preservation.json,cleanup.json,release.json}`, plus `local-browser/` and `hosted-browser/` results, responses and screenshots. The local preview was restarted with its existing data at127.0.0.1:5186; its fixture backend gives an honest local-unavailable AI message and never contacts the paid provider. Report/presentation work remains separate.
+
+
+## Desktop apps and GitHub distribution — 9 November 2026
+
+Added separate Electron 45.2.3 desktop distributions: Apple Silicon Mac arm64 and a portable Windows x64 backup. The Mac artifact was built at `a4e1e8b`; the Windows artifact at `708435d`. Their game renderer/assets are shared; the later Windows source revision adds the Windows File → Quit menu while preserving the Mac menu. Both use the same hosted accounts/data and the new JWT-verified `ai-assist-desktop` function, restricted to `app://skystride`. The original web AI function and its origin restriction are unchanged. No desktop schema migration was needed.
+
+**Mac recorded verification:** 297 automated checks across 18 files, TypeScript and desktop production compilation passed. Six actual packaged-app acceptance groups exercised secure bundled asset loading and renderer isolation; real signup and draft saving; genuine AI editor feedback; quit/relaunch persistence and saved-version testing/publication; community completion/results/ratings/favorites/rankings/achievements; a real fullscreen paused AI hint; and offline startup/guest gameplay. The existing website saw the same test account's published course and interactions. Both disposable accounts and their data were removed afterward; original profiles and courses matched their baseline checksums. No private credentials or QA profile is included in the artifact. Evidence remains in ignored `output/mac/`.
+
+**Windows status:** successfully compiled and cross-packaged on macOS as an unsigned x64 portable folder/ZIP. No tests, type checking, Windows execution or Windows browser/runtime verification were performed for this backup, per the user's request. Packaging success is not evidence of Windows runtime compatibility. Build metadata and instructions are in ignored `output/windows/`.
+
+The Mac app is ad-hoc signed and not Apple-notarized. Electron runtime downloads were checked against published SHA-256 values; runtime/art license notices are included. Source staging uses an explicit allowlist of compiled assets, the entrypoint and public Supabase configuration. Server keys, local account profiles, environment files and report artifacts are excluded.
+
+[Release 0.2.0](https://github.com/drat-git/skystride-adventures/releases/tag/v0.2.0) distributes the unchanged ZIPs, checksums, installation instructions and sanitized manifest. [Release documentation](RELEASES.md) records the exact hashes. Documentation and desktop source are published to the repository separately from website deployment; this docs/distribution push uses `[skip ci]` and leaves the existing Pages workflow/configuration intact. No game tests were rerun for the documentation publication. Report generation, presentation and pre-existing report work remain untouched.

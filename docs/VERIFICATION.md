@@ -1,3 +1,5 @@
+> **Historical record:** This file preserves earlier sprint evidence and requirements. Current V2 behavior, real AI, account policy and desktop downloads are documented in the [documentation index](README.md) and [current verification history](OVERHAUL_VERIFICATION.md). Older pending items and placeholder descriptions below are not the current release status.
+
 # Sprint 4 non-AI verification — November 8–9, 2026
 
 Current acceptance evidence is in ignored `output/sprint4/`; it includes the unchanged audit source, starting-tree archive, local/browser results, cloud migration snapshots, and hosted checks. The report and presentation were not regenerated or edited.

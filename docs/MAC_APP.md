@@ -4,6 +4,8 @@ The Mac app bundles the game, Phaser renderer, graphics and audio. It opens its 
 
 ## Run or submit the app
 
+Download the [Mac arm64 ZIP from GitHub Releases](https://github.com/drat-git/skystride-adventures/releases/download/v0.2.0/SkyStride-Adventures-mac-arm64.zip). The [release guide](RELEASES.md) includes checksums and both platforms' installation instructions. Choose the named Mac ZIP, not GitHub's automatic source-code archive.
+
 Build artifacts are in `output/mac/` (ignored by Git):
 
 - `SkyStride Adventures.app`: the application for Apple Silicon Macs.
@@ -44,6 +46,12 @@ Deploy `supabase/functions/ai-assist-desktop/index.ts` with its relative shared 
 Electron loads bundled resources through a restricted, standard, secure `app://skystride` protocol. Renderer Node integration is disabled; context isolation, sandboxing, web security and a restrictive content-security policy are enabled. Arbitrary navigation, webviews and permissions are denied. Existing credit links can open only the approved external HTTPS domains. No privileged renderer bridge is exposed.
 
 ## Verification
+
+The recorded release passed 297 automated checks across 18 files, TypeScript/production compilation, and six actual packaged-app acceptance groups. These covered real Auth, session/draft persistence after relaunch, playtest/publication, community results/interactions, rankings/achievements, real AI, fullscreen, and offline guest play. The website saw the same test-created data. Disposable verification accounts and credentials were removed afterward. This status applies to the Mac release; the Windows backup has not been runtime-tested.
+
+The Mac archive was built at source revision `a4e1e8b`. Its game renderer matches the separately bundled Windows release; the later Windows source change adds its File → Quit menu without changing the Mac menu. See [the current release record](OVERHAUL_VERIFICATION.md#desktop-apps-and-github-distribution--9-november-2026).
+
+To deliberately repeat packaged-app acceptance:
 
 ```sh
 PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node scripts/test-mac-app.mjs
