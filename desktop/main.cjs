@@ -49,7 +49,8 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(permission === 'fullscreen'));
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => permission === 'fullscreen');
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { role: 'appMenu' }, { role: 'editMenu' },
+    process.platform === 'darwin' ? { role: 'appMenu' } : { label: 'File', submenu: [{ role: 'quit' }] },
+    { role: 'editMenu' },
     { label: 'Window', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }] },
   ]));
   createWindow();

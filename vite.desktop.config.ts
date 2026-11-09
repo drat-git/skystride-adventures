@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_');
   if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(env.VITE_SUPABASE_URL ?? '') || !env.VITE_SUPABASE_PUBLISHABLE_KEY) {
-    throw Error('The Mac build needs the production Supabase URL and publishable key in .env.local.');
+    throw Error('The desktop build needs the production Supabase URL and publishable key in .env.local.');
   }
   const aiModule = resolve('src/ai.ts');
   return {
