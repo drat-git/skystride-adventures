@@ -6,6 +6,7 @@ import { officialCourses, nextOfficialCourse, themeName, titleCourse } from './c
 import { mountEditor, type EditorController } from './editor';
 import { applyMotionPreference, readMotionPreference, saveMotionPreference, prefersReducedMotion } from './settings';
 import { orderCourses, type CourseOrder } from './catalog';
+import { PASSWORD_REQUIREMENTS } from './auth';
 import type { Session } from '@supabase/supabase-js';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -150,8 +151,8 @@ function auth(register: boolean) {
   shell(register ? 'Start your adventure.' : 'Welcome back.', `<div class="form-layout"><form id="authform"><h2>${register ? 'Create account' : 'Sign in'}</h2>
     ${register ? '<label>Display name<input name="displayName" required minlength="2" maxlength="24" autocomplete="nickname" pattern="[A-Za-z0-9 _-]{2,24}"></label>' : ''}
     <label>Email<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
-    <label>Password<input name="password" type="password" required minlength="${register ? 8 : 1}" maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}"></label>
-    <p class="small">${register ? 'Use 8–128 characters. Your password is handled by the authentication provider.' : localBackend ? 'Local preview accounts are separate from your public game account. Use a new test password.' : 'Enter your registered email and password.'}</p>
+    <label>Password<input name="password" type="password" required minlength="${register ? 8 : 1}" maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}" aria-describedby="password-help"></label>
+    <p id="password-help" class="small">${register ? PASSWORD_REQUIREMENTS : localBackend ? 'Local preview accounts are separate from your public game account. Use a new test password.' : 'Enter your registered email and password.'}</p>
     <button type="submit" ${backend ? '' : 'disabled'}>${register ? 'Create account' : 'Sign in'}</button><p id="message" role="status" class="message">${localBackend ? 'Local test authentication: no confirmation emails are sent.' : backend ? '' : 'Online accounts are unavailable until Supabase is configured.'}</p></form>
     <aside><h2>${register ? 'Your place in the clouds' : 'Ready for another run?'}</h2><p>Your account retains your profile, courses, completed runs, favorites, and achievements.</p>
     ${button('switch', register ? 'Already registered? Sign in' : 'New here? Create an account', true)}${button('back', 'Back to menu', true)}</aside></div>`);

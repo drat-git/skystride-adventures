@@ -57,7 +57,9 @@ export async function createLocalBackend({dataDir,port=5187,faults={}}={}){
  async function authRequest(path,url,data,session,method){
   if(path==='/auth/v1/signup'&&method==='POST'){
    const email=typeof data.email==='string'?data.email.trim().toLowerCase():'';
-   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254||typeof data.password!=='string'||data.password.length<8||data.password.length>128)throw fail('Use a valid email and an 8–128 character local password.');
+   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)throw fail('Use a valid email address.');
+   // Match Supabase's lowercase/uppercase/digit/ASCII-symbol signup policy.
+   if(typeof data.password!=='string'||data.password.length<8||data.password.length>128||!/[A-Z]/.test(data.password)||!/[a-z]/.test(data.password)||!/[0-9]/.test(data.password)||!/[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e]/.test(data.password))throw fail('Use 8–128 characters with at least one uppercase letter, one lowercase letter, one number, and one symbol (such as !, @, or #).',400,'weak_password');
    const displayName=data.data?.display_name?.trim()??'Player';if(!/^[A-Za-z0-9 _-]{2,24}$/.test(displayName))throw fail('Use a display name of 2–24 letters, numbers, spaces, underscores or hyphens.');
    if(state.accounts.some(a=>a.email===email))throw fail('This local email is already registered.',400,'user_already_exists');
    const salt=randomBytes(16).toString('hex'),hash=(await derive(data.password,salt,64)).toString('hex');

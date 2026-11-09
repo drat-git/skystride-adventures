@@ -74,6 +74,8 @@ Before deploying to the current Supabase project, inspect hosted history and app
 
 On 9 November 2026, the user requested a complete account reset and removal of email verification. All hosted accounts and their courses, progress, interactions, awards and sessions were deleted; local preview account data and stored account recovery copies were also removed. The six built-in V2 courses and three achievement definitions were preserved. A temporary real registration verified immediate sign-in, profile creation and subsequent login, then was deleted. New players must create a fresh account; no confirmation email is required.
 
+New passwords require 8–128 characters with at least one uppercase letter, one lowercase letter, one digit and one ASCII punctuation symbol (for example `!`, `@` or `#`). The signup form and local Auth fixture validate this rule. Hosted Supabase Auth must keep **Minimum password length = 8** and **Password requirements = Lowercase, uppercase letters, digits and symbols**; direct hosted requests enforce these requirements too. Existing-account sign-in does not apply new-password validation.
+
 ## Sources and evidence
 
 The active specification is retained unchanged at `output/overhaul/sources/overhaul-plan.rtf`, with its extraction, source index, baseline archive and evidence alongside it. Reread the full specification after context compaction. The older audit plan is paused and remains in `output/sprint4/sources/`.

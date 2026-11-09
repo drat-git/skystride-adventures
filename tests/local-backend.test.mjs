@@ -19,6 +19,24 @@ it('registers two local-only users and validates passwords through real client r
  expect(unwrap(await a.auth.getUser()).user.id).toBe(uidA);
  expect(unwrap(await a.from('profiles').select('display_name').eq('id',uidA).single()).display_name).toBe('Local A');
 });
+it.each([
+ ['uppercase','lowercase9!'],['lowercase','UPPERCASE9!'],['number','MixedCase!'],['symbol','MixedCase9'],
+ ['space is not a symbol','MixedCase9 '],['Unicode is not an ASCII symbol','MixedCase9é'],
+ ['minimum length','Aa1!aaa'],['maximum length','Aa1!'+'a'.repeat(125)]
+])('rejects invalid signup passwords (%s) through the local Auth API',async(_requirement,weakPassword)=>{
+ const email='password-policy-'+randomUUID()+'@example.test';
+ const response=await client(server.url).auth.signUp({email,password:weakPassword,options:{data:{display_name:'Policy Test'}}});
+ expect(response.error?.status).toBe(400);expect(response.error?.message).toContain('uppercase letter, one lowercase letter, one number, and one symbol');expect(response.data.user).toBeNull();expect(response.data.session).toBeNull();
+ expect((await server.admin('select count(*)::int count from auth.users'))[0].count).toBe(2);
+});
+it.each([[8,'Aa1!aaaa'],[128,'Aa1!'+'a'.repeat(124)]])('accepts compliant signup passwords at the %i-character boundary',async(_length,validPassword)=>{
+ const user=client(server.url),email='password-boundary-'+randomUUID()+'@example.test';
+ const registered=unwrap(await user.auth.signUp({email,password:validPassword,options:{data:{display_name:'Policy Boundary'}}}));
+ expect(registered.session).toBeTruthy();expect(registered.user.email_confirmed_at).toBeTruthy();
+ unwrap(await user.auth.signOut());
+ expect(unwrap(await user.auth.signInWithPassword({email,password:validPassword})).user.id).toBe(registered.user.id);
+ unwrap(await user.auth.signOut());
+});
 it('uses the actual SQL/RLS for private profiles, drafts and write denial',async()=>{
  expect(unwrap(await a.from('profiles').select('id').eq('id',uidB))).toEqual([]);
  unwrap(await a.from('profiles').update({display_name:'Local Renamed'}).eq('id',uidA));
