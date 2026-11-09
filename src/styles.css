@@ -679,16 +679,6 @@ input[type=checkbox] {
   color:#9fdfa8;
   align-self:center
 }
-.ai-placeholder {
-  display:flex;
-  align-items:center;
-  gap:14px;
-  flex-wrap:wrap;
-  margin:16px 0
-}
-.ai-placeholder button {
-  font-size:12px
-}
 /* Playfield and state overlays; central area remains clear while playing. */
 .screen-play main {
   max-width:1160px;
@@ -1484,3 +1474,10 @@ input[type=checkbox] {
   background:#b0c5f0;
   color:#643f89
 }
+
+/* Assistance stays inside the fullscreen pause surface. */
+.overlay-panel { max-height: min(84vh, 680px); overflow-y: auto; }
+.ai-panel { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line, #b7c6d3); text-align: left; }
+.ai-panel p { margin: .5rem 0; }
+.ai-panel li { margin-bottom: .65rem; }
+#hint-text { line-height: 1.55; }

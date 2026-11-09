@@ -155,6 +155,7 @@ export async function createLocalBackend({dataDir,port=5187,faults={}}={}){
     const session=state.sessions.find(s=>s.token===token&&s.expires>Math.floor(Date.now()/1000));
     if(token&&token!==LOCAL_PUBLIC_KEY&&!session&&url.pathname!=='/auth/v1/token')throw fail('Local session missing or expired.',401,'session_not_found');
     if(url.pathname.startsWith('/auth/v1/')){reply(await authRequest(url.pathname,url,data,session,req.method));return;}
+    if(url.pathname==='/functions/v1/ai-assist'){reply({status:'error',message:session?'AI assistance is available in the hosted game. This local preview has no provider key.':'Sign in to use AI assistance.'},session?503:401);return;}
     const result=await restRequest(url.pathname,url,data,session,req.method,req.headers);reply(result.body,result.status??200);
    });
   }catch(error){const status=error.status??(error.code==='PT409'?409:error.code==='42501'?403:['23505','23503'].includes(error.code)?409:400);reply({message:error.message,code:error.code??'LOCAL_REQUEST',details:error.detail??null,hint:error.hint??null},status);}

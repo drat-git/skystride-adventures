@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Attempt } from '../src/attempt';
 import { validateLayout } from '../src/level';
 import { testCourse } from './fixtures/course';
-import { AI_UNAVAILABLE_MESSAGE, buildEditorContext, buildGameplayContext, requestEditorFeedback, requestGameplayHint } from '../src/ai';
+import { buildEditorContext, buildGameplayContext } from '../src/ai';
 import { applyMotionPreference, MOTION_STORAGE_KEY, prefersReducedMotion, readMotionPreference, saveMotionPreference } from '../src/settings';
 
 describe('collectible geometry', () => {
@@ -107,19 +107,16 @@ describe('device-local motion preference', () => {
   });
 });
 
-describe('deferred AI context', () => {
-  it('snapshots editable context and returns only an honest unavailable response', async () => {
+describe('AI context snapshots', () => {
+  it('detaches course and runtime observations without including account fields', () => {
     const draft = structuredClone(testCourse);
     const editor = buildEditorContext(draft);
-    const state = { position: { x: 1, y: 11 }, checkpoint: null, elapsedMs: 100, deaths: 0, collected: 0, totalItems: 0, paused: false, finished: false };
+    const state = { position: { x: 1, y: 11 }, checkpoint: null, elapsedMs: 100, deaths: 0, collected: 0, totalItems: 0, paused: true, finished: false, power:'SMALL' as const,star:false,timeLeft:149,enemies:[],movingPlatforms:[],powerups:[],consumed:[],broken:[] };
     const gameplay = buildGameplayContext(draft, state);
-    draft.layout.start.x = 5;
-    state.position.x = 6;
-    expect(editor.draft.layout.start.x).toBe(1);
+    draft.layout.start.x = 5;state.position.x = 6;
+    expect(editor.course.layout.start.x).toBe(1);
     expect(gameplay.state.position.x).toBe(1);
-    expect(gameplay.level.layout.start.x).toBe(1);
-    const unavailable = { status: 'unavailable', reason: 'not_implemented', message: AI_UNAVAILABLE_MESSAGE };
-    expect(await requestEditorFeedback(editor)).toEqual(unavailable);
-    expect(await requestGameplayHint(gameplay)).toEqual(unavailable);
+    expect(gameplay.course.layout.start.x).toBe(1);
+    expect(Object.keys(editor.course).sort()).toEqual(['difficulty','layout','title']);
   });
 });

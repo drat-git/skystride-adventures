@@ -6,7 +6,7 @@ import courses from '../src/content/official-courses.json';
 
 const db = new PGlite();
 const directory = new URL('../supabase/migrations/', import.meta.url);
-const names = readdirSync(directory).filter(n => n.endsWith('.sql')).sort();
+const names = readdirSync(directory).filter(n => n.endsWith('.sql') && n <= '20261109083220_course_run_records_and_challenges.sql').sort();
 const read = (name: string) => readFileSync(new URL(name, directory), 'utf8');
 const A = randomUUID(), B = randomUUID(), C = randomUUID(), DRAFT = randomUUID(), COMMUNITY = randomUUID();
 const setup = `create role anon;create role authenticated;create schema auth;

@@ -1,48 +1,24 @@
-import type { Level, Point } from './level';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Level } from './level';
+import { parseAiReply, type AiRequest, type AiReply, type GameplayState } from './ai-contract';
+export type { GameplayState } from './ai-contract';
 
-/** These bounded contexts are ready for the later AI phase. No provider is connected. */
-export interface GameplayState {
-  position: Point;
-  checkpoint: Point | null;
-  elapsedMs: number;
-  deaths: number;
-  collected: number;
-  totalItems: number;
-  paused: boolean;
-  finished: boolean;
+// Only course data and gameplay observations leave the browser; no account/profile fields.
+export function buildGameplayContext(level: Level, state: GameplayState): AiRequest & { mode:'hint' } {
+  return structuredClone({mode:'hint',course:{title:level.title,difficulty:level.difficulty,layout:level.layout},state});
 }
-
-export interface GameplayHintContext {
-  mode: 'gameplay';
-  level: Level;
-  state: GameplayState;
+export function buildEditorContext(draft: Omit<Level,'id'>): AiRequest & { mode:'editor' } {
+  return structuredClone({mode:'editor',course:{title:draft.title,difficulty:draft.difficulty,layout:draft.layout}});
 }
-
-export interface EditorFeedbackContext {
-  mode: 'editor';
-  draft: Omit<Level, 'id'>;
-}
-
-export interface AiUnavailable {
-  status: 'unavailable';
-  reason: 'not_implemented';
-  message: string;
-}
-
-export const AI_UNAVAILABLE_MESSAGE = 'AI assistance is not available yet.';
-
-export function buildGameplayContext(level: Level, state: GameplayState): GameplayHintContext {
-  return structuredClone({ mode: 'gameplay' as const, level, state });
-}
-
-export function buildEditorContext(draft: Omit<Level, 'id'>): EditorFeedbackContext {
-  return structuredClone({ mode: 'editor' as const, draft });
-}
-
-export async function requestGameplayHint(_context: GameplayHintContext): Promise<AiUnavailable> {
-  return { status: 'unavailable', reason: 'not_implemented', message: AI_UNAVAILABLE_MESSAGE };
-}
-
-export async function requestEditorFeedback(_context: EditorFeedbackContext): Promise<AiUnavailable> {
-  return { status: 'unavailable', reason: 'not_implemented', message: AI_UNAVAILABLE_MESSAGE };
+export async function requestAssistance(client: SupabaseClient, context: AiRequest, signal: AbortSignal): Promise<AiReply> {
+  const {data,error}=await client.functions.invoke('ai-assist',{body:context,signal,timeout:30000});
+  if(signal.aborted)throw new DOMException('Request cancelled.','AbortError');
+  if(error){
+    let message='AI assistance could not connect. Please try again.';
+    if(error.context instanceof Response){
+      try{const body=await error.context.json();if(typeof body.message==='string'&&body.message.length<=240)message=body.message;}catch{}
+    }else if(error.name==='FunctionsFetchError')message='AI assistance could not connect or timed out. Please try again.';
+    throw Error(message);
+  }
+  return parseAiReply(data,context.mode);
 }

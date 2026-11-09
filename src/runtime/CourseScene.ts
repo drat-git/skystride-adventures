@@ -368,7 +368,19 @@ export class CourseScene extends Phaser.Scene {
     const hud: RunHud = { ...this.model.attempt.result(), score: this.model.score, timeLeft: Math.ceil(this.model.remainingMs / 1000), power: this.player.powerState, star: this.player.starActive };
     this.options.onHud?.(hud);
   }
-  getContext() { return buildGameplayContext(this.level, { position: this.player ? { x: this.player.x / 18 - .5, y: this.player.y / 18 - .5 } : this.layout.start, checkpoint: this.model.checkpoint, ...this.model.attempt.result(), paused: this.model.status === 'paused', finished: this.model.status === 'complete' }); }
+  getContext() {
+    const x=this.player?this.player.x/18-.5:this.layout.start.x;
+    const nearby=<T extends {x:number;y:number}>(list:T[])=>list.filter(p=>p.x>=x-12&&p.x<=x+28).sort((a,b)=>Math.abs(a.x-x)-Math.abs(b.x-x)).slice(0,32);
+    return buildGameplayContext(this.level, {
+      position:this.player?{x,y:this.player.y/18-.5}:this.layout.start,checkpoint:this.model.checkpoint,
+      ...this.model.attempt.result(),paused:this.model.status==='paused',finished:this.model.status==='complete',
+      power:this.player?.powerState??'SMALL',star:this.player?.starActive??false,timeLeft:Math.ceil(this.model.remainingMs/1000),
+      enemies:nearby((this.enemies?.getChildren()??[]).filter(o=>o.active&&(o as Enemy).mode!=='defeated').map(o=>{const e=o as Enemy;return {x:e.x/18-.5,y:e.y/18-.5,kind:e.mode==='shell'&&e.shellMoving?'moving-shell':e.mode,direction:e.direction,behavior:e.spec.behavior};})),
+      movingPlatforms:nearby(this.moving.map(m=>({x:m.sprite.x/18-m.spec.width/2,y:m.sprite.y/18-.5,kind:'platform',width:m.spec.width,behavior:m.spec.axis}))),
+      powerups:nearby((this.powers?.getChildren()??[]).filter(o=>o.active).map(o=>{const p=o as Sprite;return {x:p.x/18-.5,y:p.y/18-.5,kind:String(p.getData('kind'))};})),
+      consumed:[...this.model.consumed],broken:[...this.model.broken],
+    });
+  }
   /** Immutable observation seam: all objects are copied, no live physics handles. */
   getSnapshot() {
     const p = this.player, body = p?.body;

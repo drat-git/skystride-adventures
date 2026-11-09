@@ -1,4 +1,5 @@
 import './styles.css';
+import { requestAssistance } from './ai';
 import { backend, localBackend, type CourseSummary, type InteractionState } from './backend';
 import type { Level } from './level';
 import { mountGame, type RunResult, type RunState, type RunHud, type ControlAction } from './game';
@@ -170,7 +171,7 @@ async function progress() {
   }catch(error){if(stamp===revision)message(errorText(error),true);}
 }
 function credits() {
-  screen='credits';shell('Made for the climb.',`<section class="credits-panel"><h2>Game and art</h2><p>SkyStride Adventures is a software engineering class project. The gameplay, player, and first four course layouts are adapted from <a href="https://github.com/nunoamorim99/AstroHop" target="_blank" rel="noreferrer">Astro Hop by Nuno Amorim</a> (MIT).</p><p>Pixel Platformer sprites by <a href="https://kenney.nl/assets/pixel-platformer" target="_blank" rel="noreferrer">Kenney</a> (CC0). The sky courses draw level-design inspiration from World 7-6 of New Super Mario Bros. for Nintendo DS. Nintendo artwork is not included.</p><p>Built with Phaser, TypeScript, Vite, and Supabase. AI hints and editor feedback are reserved for a later phase.</p></section>`);
+  screen='credits';shell('Made for the climb.',`<section class="credits-panel"><h2>Game and art</h2><p>SkyStride Adventures is a software engineering class project. The gameplay, player, and first four course layouts are adapted from <a href="https://github.com/nunoamorim99/AstroHop" target="_blank" rel="noreferrer">Astro Hop by Nuno Amorim</a> (MIT).</p><p>Pixel Platformer sprites by <a href="https://kenney.nl/assets/pixel-platformer" target="_blank" rel="noreferrer">Kenney</a> (CC0). The sky courses draw level-design inspiration from World 7-6 of New Super Mario Bros. for Nintendo DS. Nintendo artwork is not included.</p><p>Built with Phaser, TypeScript, Vite, and Supabase. AI hints and Course Maker feedback use OpenAI. Suggestions may be imperfect; playtesting remains required.</p></section>`);
 }
 function auth(register: boolean) {
   screen = 'auth';
@@ -335,15 +336,30 @@ async function leaderboard(level: Level, mode: 'time'|'score' = 'time') {
 async function play(level: Level, local: boolean) {
   screen = 'play'; const save = !local && !!session && !!backend;
   shell(escape(level.title), `<div class="play-topline"><span class="badge">${level.officialOrder ? `LEVEL ${level.officialOrder} / 6` : 'COMMUNITY'} · ${themeName(level)}</span><div class="play-options">${button('sound','Sound on',true)}${button('fullscreen','Fullscreen',true)}${button('pause','Pause',true)}</div></div>
-    <div id="play-stage" class="play-stage"><div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div></div></div></div>
+    <div id="play-stage" class="play-stage"><div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div><section id="hint-panel" class="ai-panel" hidden aria-label="AI gameplay hint"><button id="request-hint" class="secondary" aria-describedby="hint-status">AI Hint</button><p id="hint-status" class="small" role="status"></p><p id="hint-text"></p></section></div></div></div>
     <div id="run-hud" class="run-hud" aria-label="Run statistics"><span>COINS <b id="hud-coins">0 / ${level.layout.items.length+level.layout.blocks.filter(b=>b.content==='coin').length}</b></span><span>TIME ELAPSED <b id="hud-elapsed">0.0 s</b><small>Fastest completion<br><span id="hud-fastest">${save?'Loading…':'Not completed'}</span></small></span><span>POWER <b id="hud-power">SMALL</b></span><span>TIME LIMIT <b id="hud-time">${level.layout.timeLimit} s</b><small>remaining of ${level.layout.timeLimit} s</small></span><span>SCORE <b id="hud-score">0</b></span></div>
     <div class="fullscreen-controls">${button('fullscreen-pause','Pause',true)}${button('exit-fullscreen','Exit fullscreen',true)}</div></div>
     <div class="touch-controls" aria-label="Touch game controls"><div><button data-control="left" aria-label="Move left">◀</button><button data-control="right" aria-label="Move right">▶</button></div><div><button data-control="fire" aria-label="Throw fireball">FIRE</button><button data-control="jump" aria-label="Jump">JUMP</button></div></div>
     <p id="message" class="message" role="status">${save ? 'Starting your account attempt…' : 'Guest practice · This run is not saved to an account.'}</p>
     <div class="actions run-actions">${button('retry','Restart course',true)}<button id="save-result" hidden>Retry saving result</button>${local?'':button('details','Course details',true)}${button('back','Level list',true)}${button('run-menu','Main menu',true)}</div>
-    <details class="controls-help"><summary>Controls & assistance</summary><p>← / → or A / D: move · Space / ↑ / W: jump · X / J: throw fireball · Esc: pause. Hold jump for more height.</p><div class="ai-placeholder"><button disabled aria-describedby="ai-hint-status">AI Hint</button><span id="ai-hint-status" class="small">Not available yet.</span></div></details>`);
+    <details class="controls-help"><summary>Controls & assistance</summary><p>← / → or A / D: move · Space / ↑ / W: jump · X / J: throw fireball · Esc: pause. Hold jump for more height.</p><p>Pause your run to request an AI Hint. Sign-in required. AI suggestions may be imperfect.</p></details>`);
   let paused=false, attemptId:string|undefined, result:RunResult|undefined, saving=false,resultSaved=false;
   const stamp=revision,uid=session?.user.id, list=level.officialOrder?adventure:levels;
+  let hintAbort:AbortController|undefined, hintGeneration=0;
+  const hintButton=document.getElementById('request-hint') as HTMLButtonElement;
+  const hintStatus=document.getElementById('hint-status')!;
+  const resetHint=()=>{hintGeneration++;hintAbort?.abort();hintAbort=undefined;hintButton.disabled=!uid||!backend;hintStatus.textContent=uid?'Ask for a next-step hint. Your run stays paused.':'Sign in to request AI hints.';document.getElementById('hint-text')!.textContent='';};
+  resetHint();
+  on('request-hint',async()=>{
+    if(!paused||!currentGame||!backend||!uid||hintAbort)return;
+    const request=++hintGeneration, controller=new AbortController();hintAbort=controller;
+    hintButton.disabled=true;hintStatus.textContent='Thinking… Your run is paused.';document.getElementById('hint-text')!.textContent='';
+    try{const reply=await requestAssistance(backend.client,currentGame.scene.getContext(),controller.signal);
+      if(request!==hintGeneration||stamp!==revision||!paused||session?.user.id!==uid)return;
+      if(reply.mode==='hint'){document.getElementById('hint-text')!.textContent=reply.hint;hintStatus.textContent='AI suggestion · Select Resume when ready.';}
+    }catch(error){if(request===hintGeneration&&stamp===revision&&!controller.signal.aborted)hintStatus.textContent=errorText(error);}
+    finally{if(request===hintGeneration&&stamp===revision){hintAbort=undefined;hintButton.disabled=false;}}
+  });
   let fastestMs=save?null:guestProgress.get(level.id)??null, fastestKnown=!save;
   const showFastest=()=>{if(stamp===revision)document.getElementById('hud-fastest')!.textContent=fastestKnown?(fastestMs===null?'Not completed':`${(fastestMs/1000).toFixed(2)} s`):'Unavailable';};
   const loadFastest=async()=>{try{const saved=(await backend!.progress(uid!)).find(p=>p.levelId===level.id)?.bestMs??null;if(stamp!==revision)return;fastestKnown=true;fastestMs=resultSaved&&result?Math.min(saved??Infinity,result.elapsedMs):saved;showFastest();}catch{if(stamp===revision&&!fastestKnown)showFastest();}};
@@ -361,6 +377,7 @@ async function play(level: Level, local: boolean) {
   on('pause',togglePause);on('fullscreen-pause',togglePause);on('retry',()=>leave(()=>play(level,local)));on('back',()=>leave(list));on('run-menu',()=>leave(home));on('details',()=>leave(()=>courseDetails(level)));
   const overlay=(state:RunState)=>{
     if(stamp!==revision)return; paused=state.status==='paused';
+    document.getElementById('hint-panel')!.hidden=!paused;if(!paused)resetHint();
     for(const id of ['pause','fullscreen-pause']){const pause=document.getElementById(id) as HTMLButtonElement;
       pause.textContent=paused?'Resume':'Pause';pause.disabled=state.status==='complete'||state.status==='dead';}
     const panel=document.getElementById('run-overlay')!;panel.hidden=state.status==='playing';
@@ -391,7 +408,7 @@ async function play(level: Level, local: boolean) {
   let fullscreenFrame=0;
   const fullscreenChanged=()=>{const control=document.getElementById('fullscreen');if(control)control.textContent=document.fullscreenElement===stage?'Exit fullscreen':'Fullscreen';
     cancelAnimationFrame(fullscreenFrame);fullscreenFrame=requestAnimationFrame(()=>{if(stamp!==revision)return;currentGame?.game.scale.refresh();if(document.getElementById('run-overlay')?.hidden)document.getElementById('game')?.focus({preventScroll:true});else stage.querySelector<HTMLButtonElement>('#overlay-actions button')?.focus({preventScroll:true});});};
-  document.addEventListener('keydown',escapeKey);document.addEventListener('fullscreenchange',fullscreenChanged);fullscreenChanged();screenCleanup=()=>{cancelAnimationFrame(fullscreenFrame);document.removeEventListener('keydown',escapeKey);document.removeEventListener('fullscreenchange',fullscreenChanged);};
+  document.addEventListener('keydown',escapeKey);document.addEventListener('fullscreenchange',fullscreenChanged);fullscreenChanged();screenCleanup=()=>{hintGeneration++;hintAbort?.abort();cancelAnimationFrame(fullscreenFrame);document.removeEventListener('keydown',escapeKey);document.removeEventListener('fullscreenchange',fullscreenChanged);};
   try{
     if(save){attemptId=await backend!.startAttempt(uid!,level.id);if(stamp!==revision)return;message('Reach the flag. Your completed result will be saved.');}
     currentGame=mountGame(document.getElementById('game')!,level,completed=>{

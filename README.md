@@ -2,7 +2,7 @@
 
 A retro browser platformer built with Phaser3, TypeScript, Vite and Supabase. The V2 overhaul adds six scrolling courses, source-derived Astro Hop movement and sprites, enemies, power-ups, breakable/glowing blocks, and a complete title, pause, death and progression menu.
 
-The V2 overhaul was developed on **`codex/skystride-game-overhaul`** and released to **`main`** on 9 November 2026. [Play the public game](https://drat-git.github.io/skystride-adventures/). Hosted Supabase now accepts V2 courses only. The six official courses, accounts and V2 records are retained; V1 courses and their dependent records have been retired. Development still uses a separate local database. Accounts, profiles, community courses, reliable draft saving, saved-version testing, publication, ratings, favorites, achievements, leaderboards, settings, and disabled AI placeholders remain integrated.
+The V2 overhaul was developed on **`codex/skystride-game-overhaul`** and released to **`main`** on 9 November 2026. [Play the public game](https://drat-git.github.io/skystride-adventures/). Hosted Supabase now accepts V2 courses only. The six official courses, accounts and V2 records are retained; V1 courses and their dependent records have been retired. Development still uses a separate local database. Accounts, profiles, community courses, reliable draft saving, saved-version testing, publication, ratings, favorites, achievements, leaderboards, settings, and OpenAI gameplay hints/editor feedback remain integrated.
 
 ## Run locally
 
@@ -39,7 +39,7 @@ Save a private draft, select **Test saved version**, complete that exact revisio
 
 V1 courses, the Classic practice menu, legacy renderer/editor conversion and old seed scripts have been removed. Only V2 courses can be loaded or saved. The timed achievement now rewards Meadow Run in under 30 seconds; previously earned awards remain intact under their stable database identity.
 
-**AI Hint** and **AI Editor Feedback** remain disabled with honest unavailable messages and typed future context interfaces. They make no provider requests and never gate game or editor actions.
+**AI Hint** is available to signed-in players from the pause overlay, including fullscreen. The run stays paused while a context-specific hint is generated and read. **AI Editor Feedback** reviews the current unsaved draft and gives an assessment plus three suggestions; edits invalidate the feedback. Neither feature approves publication or blocks ordinary play/editing. The hosted Edge Function keeps the OpenAI key private and limits requests to 5/minute and 50/day per account, with a 200/day project cap. See [AI setup and verification](docs/AI.md). Local development has no model key and shows an honest unavailable message.
 
 ## Verify and build
 
@@ -55,6 +55,7 @@ npm run test:courses:sky
 npm run test:courses:final
 npm run test:production
 npm run test:title
+node scripts/test-ai-browser.mjs
 ```
 
 The opt-in real hosted journey is `node --env-file=.env.local scripts/test-overhaul-hosted.mjs`, using dedicated `TEST_EMAIL_A` / `TEST_PASSWORD_A` and `TEST_EMAIL_B` / `TEST_PASSWORD_B` credentials. Recreate dedicated test accounts and these private environment variables before rerunning it: the previous accounts and credentials were removed in the account reset. It creates a clearly named published verification course and private copy, then exercises actual account interactions; it is not part of `npm test`.
@@ -83,4 +84,4 @@ The active specification is retained unchanged at `output/overhaul/sources/overh
 
 Astro Hop by Nuno Amorim supplies the MIT-licensed reference code and first four course layouts. Kenney Pixel Platformer supplies CC0 art. Notices ship under `public/assets/astrohop/`; the in-game Credits screen links the sources. The two sky courses adapt the route and encounter structure of New Super Mario Bros. DS World7-6; no Nintendo artwork is shipped. Exact provenance, deliberate differences and test scope are in [OVERHAUL.md](docs/OVERHAUL.md).
 
-Current acceptance focuses on desktop, per the user's scope decision. Report generation, presentation work, teammate coordination, live AI features remain separate work. Historical deployed Sprint4 evidence remains in [VERIFICATION.md](docs/VERIFICATION.md); V2 release evidence is recorded in [OVERHAUL_VERIFICATION.md](docs/OVERHAUL_VERIFICATION.md).
+Current acceptance focuses on desktop, per the user's scope decision. Report generation, presentation work, and teammate coordination remain separate work. Live AI setup and evidence are documented in [AI.md](docs/AI.md). Historical deployed Sprint4 evidence remains in [VERIFICATION.md](docs/VERIFICATION.md); V2 release evidence is recorded in [OVERHAUL_VERIFICATION.md](docs/OVERHAUL_VERIFICATION.md).

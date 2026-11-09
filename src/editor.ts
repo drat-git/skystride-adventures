@@ -1,3 +1,4 @@
+import { buildEditorContext, requestAssistance } from './ai';
 import { type Backend, type OwnedLevel } from './backend';
 import { validateLayout, type Level } from './level';
 import type { LayoutV2 } from './course-format';
@@ -16,6 +17,7 @@ const errorText = (error: unknown) => error instanceof Error ? error.message :
 
 /** Private drafts and immutable published courses share one creator workspace. */
 export function mountEditor(host: HTMLElement, api: Backend, userId: string): EditorController {
+  let aiAbort:AbortController|undefined, aiGeneration=0, aiShown=false;
   let active = true, busy = false, beforeUnloadAttached = false, generation = 0;
   let id: string = crypto.randomUUID();
   let current: OwnedLevel | undefined;
@@ -42,7 +44,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     </div><div class="editor-world-controls">
       ${choice('course-theme', 'World theme', ['overworld', 'cave', 'sky'])}
       ${numeric('course-cols', 'Course width (tiles)', 64, 24, 512)}
-      ${numeric('course-time', 'Time limit (seconds)', 300, 30, 900)}
+      ${numeric('course-time', 'Time limit (seconds)', 150, 30, 900)}
       ${numeric('finish-height', 'Finish flag height (tiles)', 5, 1, 20)}
     </div></details>
     <div class="editor-layout"><aside class="editor-palette">
@@ -78,7 +80,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
       <button id="preview-draft" type="button" class="secondary">Preview draft</button><button id="test-draft" type="button" class="secondary">Test saved version</button><button id="publish-draft" type="button">Publish course</button>
       <button id="copy-draft" type="button" class="secondary">Copy to new draft</button><button id="reload-draft" type="button" class="secondary" hidden>Reload saved version</button>
       <button id="editor-ai" type="button" class="secondary" disabled aria-describedby="editor-ai-status">AI Editor Feedback</button>
-    </div><p id="editor-ai-status" class="small">AI editor feedback is not available yet. Editing and publishing work without it.</p><p id="draft-message" class="message" role="status">Loading your courses…</p>
+    </div><section class="ai-panel" aria-label="AI editor feedback"><p id="editor-ai-status" class="small" role="status">Review your current draft with AI. Suggestions may be imperfect; publishing still requires your playtest.</p><div id="editor-ai-result"></div></section><p id="draft-message" class="message" role="status">Loading your courses…</p>
   </form>
   <div class="editor-preview-panel" id="preview-panel" hidden><p id="preview-state" role="status"></p><p id="preview-hud" class="small"></p>
     <div class="actions" id="preview-controls" hidden><button id="pause-preview" class="secondary">Pause preview</button><button id="restart-preview" class="secondary">Restart preview</button><button id="resume-preview-death" hidden>Resume at checkpoint</button><button id="stop-preview" class="secondary">Stop preview</button><button id="retry-playtest" hidden>Retry saving playtest</button></div>
@@ -122,7 +124,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     el<HTMLButtonElement>('#copy-draft').disabled = busy;
     el<HTMLButtonElement>('#reload-draft').disabled = busy || (!current && !saveAttempted);
     el('#reload-draft').hidden = !current && !saveAttempted;
-    el<HTMLButtonElement>('#editor-ai').disabled = true;
+    el<HTMLButtonElement>('#editor-ai').disabled = busy || loading || !!aiAbort;
     el<HTMLButtonElement>('#pause-preview').disabled = busy || !preview || finished || previewDead;
     el<HTMLButtonElement>('#restart-preview').disabled = busy || !preview;
     for (const control of host.querySelectorAll<HTMLButtonElement>('[data-preview-control]')) control.disabled = busy || !preview || paused || previewDead || finished;
@@ -138,6 +140,27 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     if (!dirty && beforeUnloadAttached) { window.removeEventListener('beforeunload', beforeUnload); beforeUnloadAttached = false; }
   }
 
+  function invalidateAi() {
+    aiGeneration++;aiAbort?.abort();aiAbort=undefined;
+    if(aiShown){el('#editor-ai-result').replaceChildren();el('#editor-ai-status').textContent='Draft changed. Request fresh AI feedback for this version.';}
+  }
+  el<HTMLButtonElement>('#editor-ai').onclick=async()=>{
+    if(busy||loading||aiAbort)return;
+    const controller=new AbortController(),request=++aiGeneration,before=snapshot();aiAbort=controller;aiShown=true;
+    el('#editor-ai-result').replaceChildren();el('#editor-ai-status').textContent='Reviewing your current draft… You can keep editing.';controls();preview?.scene.setPaused(true);
+    try{
+      const draft=values();validateLayout(draft.layout);
+      const reply=await requestAssistance(api.client,buildEditorContext(draft),controller.signal);
+      if(!active||request!==aiGeneration||before!==snapshot())return;
+      if(reply.mode==='editor'){
+        const assessment=document.createElement('p');assessment.textContent=reply.assessment;
+        const suggestions=document.createElement('ol');for(const text of reply.suggestions){const item=document.createElement('li');item.textContent=text;suggestions.append(item);}
+        el('#editor-ai-result').replaceChildren(assessment,suggestions);el('#editor-ai-status').textContent='AI feedback for this draft · Apply any changes yourself, then playtest.';
+      }
+    }catch(error){if(active&&request===aiGeneration&&!controller.signal.aborted)el('#editor-ai-status').textContent=errorText(error);}
+    finally{if(active&&request===aiGeneration){aiAbort=undefined;controls();}}
+  };
+
   function canLeave() {
     if (busy) { note('Please wait for the current request to finish before leaving.'); return false; }
     return !isDirty() || window.confirm('Discard your unsaved draft changes?');
@@ -152,6 +175,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
 
   function changed() {
     if (busy || current?.published) return;
+    invalidateAi();
     approvalInvalidated = true;
     if (previewIsSavedTest) stop();
     else preview?.scene.setPaused(true);
@@ -336,7 +360,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
   }
 
   function load(course?: OwnedLevel, copy?: Omit<Level, 'id'>) {
-    stop(); current = course; id = course?.id ?? crypto.randomUUID();
+    invalidateAi(); stop(); current = course; id = course?.id ?? crypto.randomUUID();
     approvalInvalidated = false; saveAttempted = false;
     const data = course ?? copy;
     layout = structuredClone(data?.layout ?? newEditorLayout());
@@ -509,6 +533,7 @@ export function mountEditor(host: HTMLElement, api: Backend, userId: string): Ed
     isDirty,
     canLeave,
     destroy() {
+      aiGeneration++;aiAbort?.abort();
       active = false; generation++; preview?.destroy(); preview = undefined;
       window.removeEventListener('beforeunload', beforeUnload);
       cancelAnimationFrame(renderFrame); viewport.removeEventListener('scroll', queueRender);
