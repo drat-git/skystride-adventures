@@ -1,7 +1,8 @@
 import './styles.css';
-import { backend, configured, type CourseSummary, type InteractionState } from './backend';
+import { backend, localBackend, type CourseSummary, type InteractionState } from './backend';
 import { practiceLevel, type Level } from './level';
-import { mountGame, type RunResult } from './game';
+import { mountGame, type RunResult, type RunState, type RunHud, type ControlAction } from './game';
+import { officialCourses, nextOfficialCourse, themeName, titleCourse } from './content/official';
 import { mountEditor, type EditorController } from './editor';
 import { applyMotionPreference, readMotionPreference, saveMotionPreference, prefersReducedMotion } from './settings';
 import { orderCourses, type CourseOrder } from './catalog';
@@ -10,9 +11,14 @@ import type { Session } from '@supabase/supabase-js';
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let session: Session | null = null;
 let currentGame: ReturnType<typeof mountGame> | null = null;
+// Read-only local playtest seam; omitted from production builds.
+if (import.meta.env.DEV) Object.defineProperty(window, '__SKYSTRIDE_SNAPSHOT__', { value: () => currentGame?.scene.getSnapshot() ?? null });
 let editorController: EditorController | undefined;
 let revision = 0;
-let screen = 'home';
+let screen = 'title';
+let screenCleanup: (() => void) | undefined;
+let runCanLeave: (() => boolean) | undefined;
+const guestProgress = new Map<string, number>();
 let browseOrder: CourseOrder = 'title';
 let favoritesOnly = false;
 let accountStatusError = '';
@@ -25,18 +31,37 @@ function on(id: string, fn: () => void | Promise<void>) {
   document.getElementById(id)?.addEventListener('click', event => { event.preventDefault(); void fn(); });
 }
 function navigate(fn: () => void | Promise<void>) {
-  if (!editorController || editorController.canLeave()) void fn();
+  if ((!editorController || editorController.canLeave()) && (!runCanLeave || runCanLeave())) void fn();
 }
 function onNavigate(id: string, fn: () => void | Promise<void>) { on(id, () => navigate(fn)); }
-function shell(title: string, body: string) {
+function clearScreen() {
   revision++;
+  screenCleanup?.(); screenCleanup = undefined;
+  runCanLeave = undefined;
   currentGame?.destroy(); currentGame = null;
   editorController?.destroy(); editorController = undefined;
-  root.innerHTML = `<header><a href="#" id="brand" class="brand"><span class="mark">↗</span> SkyStride <span>Adventures</span></a><div class="account">${session ? `<span>${escape(session.user.email ?? 'Player')}</span>${button('signout', 'Sign out', true)}` : button('signin', 'Sign in', true)}</div></header>
+}
+function shell(title: string, body: string) {
+  clearScreen();
+  root.className = `screen-${screen}`;
+  root.innerHTML = `<header class="game-header"><a href="#" id="brand" class="brand"><span class="player-icon" aria-hidden="true"></span><span>SKYSTRIDE<small>ADVENTURES</small></span></a><nav aria-label="Main navigation">${screen === 'home' ? '' : button('menu', 'Main menu', true)}<div class="account">${session ? `${button('account', 'My account', true)}${button('signout', 'Sign out', true)}` : button('signin', 'Sign in', true)}</div></nav></header>
     <div id="account-status" class="message error global-status" role="alert" ${accountStatusError ? '' : 'hidden'}>${escape(accountStatusError)}</div>
-    <main><p class="eyebrow">GROUP 9 · SPRINT 4</p><h1>${title}</h1>${body}</main>
-    <footer>Short courses. One more jump. <span>SkyStride Adventures · Fall 2026</span></footer>`;
-  onNavigate('brand', home); onNavigate('signin', () => auth(false)); on('signout', signout);
+    <main><div class="page-heading"><p class="eyebrow">${screen === 'play' ? 'THE ADVENTURE CONTINUES' : 'SKYSTRIDE ADVENTURES'}</p><h1 tabindex="-1">${title}</h1></div>${body}</main>
+    <footer><span>${localBackend ? 'LOCAL DEVELOPMENT · Separate test accounts and database' : 'Six little worlds. One more jump.'}</span>${button('credits', 'Credits', true)}</footer>`;
+  onNavigate('brand', home); onNavigate('menu', home); onNavigate('signin', () => auth(false)); onNavigate('account', profile); on('signout', signout); onNavigate('credits', credits);
+  document.querySelector<HTMLElement>('h1')?.focus({preventScroll:true});
+}
+function title() {
+  screen = 'title'; clearScreen(); root.className = 'screen-title';
+  root.innerHTML = `<main class="title-screen"><div id="title-demo" class="title-demo" aria-hidden="true"></div><div class="title-copy"><p class="eyebrow">A LITTLE COURAGE. A WELL-TIMED JUMP.</p><h1>SKYSTRIDE<span>ADVENTURES</span></h1><button id="enter-menu" class="start-prompt">PRESS ANY KEY <span>or tap to start</span></button></div><p class="title-foot">SIX WORLDS ABOVE THE ORDINARY</p></main>`;
+  currentGame = mountGame(document.getElementById('title-demo')!, titleCourse(), () => {}, {demo:true});
+  let activationKey: string | undefined;
+  const down = (event: KeyboardEvent) => { if(event.repeat)return; event.preventDefault(); event.stopImmediatePropagation(); activationKey = event.code; };
+  const up = (event: KeyboardEvent) => { if(event.code!==activationKey)return; event.preventDefault(); event.stopImmediatePropagation(); home(); };
+  const pointer = (event: Event) => { event.preventDefault(); event.stopPropagation(); home(); };
+  document.addEventListener('keydown', down, true); document.addEventListener('keyup', up, true);
+  root.addEventListener('click', pointer, {once:true});
+  screenCleanup = () => { document.removeEventListener('keydown', down, true); document.removeEventListener('keyup', up, true); root.removeEventListener('click', pointer); };
 }
 function message(text: string, error = false) {
   const el = document.getElementById('message');
@@ -46,7 +71,7 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : 'The request failed. Please try again.';
 }
 async function signout() {
-  if (!backend || (editorController && !editorController.canLeave())) return;
+  if (!backend || (editorController && !editorController.canLeave()) || (runCanLeave && !runCanLeave())) return;
   const control = document.getElementById('signout') as HTMLButtonElement;
   control.disabled = true;
   try { await backend.logout(); accountStatusError = ''; session = null; favoritesOnly = false; home(); }
@@ -60,16 +85,62 @@ async function signout() {
 }
 function home() {
   screen = 'home';
-  shell('Find your next flight.', `<div class="hero"><div><p class="lead">A little courage. A well-timed jump. Take on compact platform courses and reach the finish flag.</p>
-    <div class="actions">${button('levels', 'Browse courses')}${button('practice', 'Local practice', true)}</div>
-    <p class="small">Arrow keys or A / D to move. Space, ↑ or W to jump.</p></div>
-    <div class="hero-art" aria-label="Illustration of platforms and a finish flag"><span class="sun"></span><span class="mountain one"></span><span class="mountain two"></span><span class="ledge l1"></span><span class="ledge l2"></span><span class="ledge l3"></span><span class="runner"></span><span class="flag">⚑</span></div></div>
-    <div class="summary"><article><span class="number">01</span><h2>Play a course</h2><p>Find community courses, collect sky tokens, and make every checkpoint count.</p>${button('settings', 'Settings', true)}</article>
-    <article><span class="number">02</span><h2>Keep your progress</h2><p>Save your best times, collect achievements, and return to your favorite courses.</p>${button('profile', session ? 'Your profile' : 'Create an account', true)} ${button('awards', 'Achievements', true)}</article>
-    <article><span class="number">03</span><h2>Build a new flight</h2><p>Create a private draft, finish a test of its saved version, and publish it for everyone.</p>${button('editor', 'Create a level', true)}</article></div>
-    <p id="message" class="message" role="status">${configured ? 'Online courses and account progress use the project database.' : 'Online setup is pending. Local practice works without an account and does not save progress.'}</p>`);
-  on('levels', levels); on('practice', () => play(practiceLevel, true)); on('settings', settings);
-  on('profile', () => session ? profile() : auth(true)); on('editor', editor); on('awards', awards);
+  shell('Your next adventure<br><em>starts up here.</em>', `<div class="menu-world" aria-hidden="true"><span class="menu-cloud c1"></span><span class="menu-cloud c2"></span><span class="menu-island"><i class="player-icon"></i></span><span class="menu-island small-island"></span></div>
+    <div class="main-menu" aria-label="Main menu"><div class="primary-menu">${button('official', '<span class="menu-glyph">▶</span> Play adventure <small>Six official courses · three worlds</small>')}${button('levels', '<span class="menu-glyph">♧</span> Community courses <small>Discover, rate, and favorite new routes</small>', true)}${button('editor', '<span class="menu-glyph">✦</span> Course workshop <small>Create, test, and publish your own</small>', true)}</div>
+    <div class="secondary-menu">${button('progress', 'My progress', true)}${button('awards', 'Achievements', true)}${button('settings', 'Settings', true)}${button('profile', session ? 'Player profile' : 'Create account', true)}${button('practice', 'Classic practice', true)}${button('show-title', 'Title screen', true)}</div></div>
+    <p id="message" class="menu-note" role="status">${session ? `Welcome back, ${escape(session.user.user_metadata?.display_name || 'adventurer')}.` : 'Play as a guest, or sign in to keep your times and achievements.'} ${localBackend ? 'This preview uses a separate local database.' : ''}</p>`);
+  on('official', adventure); on('levels', levels); on('practice', () => play(practiceLevel, true)); on('settings', settings);
+  on('profile', () => session ? profile() : auth(true)); on('editor', editor); on('awards', awards); on('progress', progress); on('show-title', title);
+}
+function coursePicture(course: Level) {
+  const theme = course.layout.version===2 ? course.layout.theme : 'overworld';
+  return `<div class="course-preview ${theme}" aria-hidden="true"><span class="preview-cloud"></span><i></i><i></i><i></i><span class="player-icon"></span><b>⚑</b></div>`;
+}
+async function adventure() {
+  screen = 'adventure';
+  shell('Choose your horizon.', `<p class="lead">Meadows, caverns, and open sky. Every course is ready to explore.</p><p id="message" class="message" role="status">${session ? 'Loading your progress…' : 'Guest progress lasts for this visit. Sign in to save your best times.'}</p><div id="official-courses" class="official-courses"></div>`);
+  const stamp=revision;
+  const completed = session ? new Map<string,number>() : new Map(guestProgress);
+  let published = new Map<string,Level>();
+  try {
+    if(backend) {
+      const [catalog, saved] = await Promise.all([backend.levels(),session ? backend.progress(session.user.id) : Promise.resolve([])]);
+      if(stamp!==revision)return;
+      published = new Map(catalog.map(c=>[c.id,c]));
+      if(session){completed.clear();for(const p of saved)if(p.completed&&p.bestMs!==null)completed.set(p.levelId,p.bestMs);}
+    }
+    message(session ? 'Your completed courses and best times are up to date.' : 'Guest progress lasts for this visit. Sign in to save your best times.');
+  } catch(error){ if(stamp!==revision)return; message(`Progress could not be loaded: ${errorText(error)}. You can still play locally.`,true); }
+  if(stamp!==revision)return;
+  const container=document.getElementById('official-courses')!;
+  for(const level of officialCourses){
+    const saved=published.get(level.id),best=completed.get(level.id), card=document.createElement('article');card.className='official-card';
+    card.innerHTML=`${coursePicture(level)}<div class="course-body"><p class="eyebrow">${String(level.officialOrder).padStart(2,'0')} / ${themeName(level)}</p><h2>${escape(level.title)}</h2><p>${escape(level.description)}</p><span class="course-progress">${best===undefined?'Ready to explore':`✓ Complete · ${(best/1000).toFixed(2)} s`}</span><div class="actions">${button(`official-${level.officialOrder}`,best===undefined?'Play level':'Replay level')}${saved?button(`official-rank-${level.officialOrder}`,'Leaderboard',true):''}</div></div>`;
+    container.append(card); on(`official-${level.officialOrder}`,()=>play(saved??level,!saved));
+    on(`official-rank-${level.officialOrder}`,()=>leaderboard(saved!));
+  }
+}
+async function startOfficial(level: Level) {
+  const stamp=revision;
+  try {
+    const published=backend ? (await backend.levels()).find(c=>c.id===level.id) : undefined;
+    if(stamp!==revision)return;
+    await play(published??level,!published);
+  } catch(error) { if(stamp===revision)message(`Could not load the next course: ${errorText(error)}. Open the level list to retry or play locally.`,true); }
+}
+async function progress() {
+  screen='progress'; shell('Every flight counts.',`<p id="message" class="message" role="status">Loading progress…</p><div id="progress-body"></div><div class="actions">${button('continue','Play adventure')}${button('progress-awards','Achievements',true)}${button('refresh-progress','Refresh progress',true)}</div>`);
+  on('continue',adventure);on('progress-awards',awards);on('refresh-progress',progress);const stamp=revision;
+  try{
+    const saved=session&&backend?await backend.progress(session.user.id):[...guestProgress].map(([levelId,bestMs])=>({levelId,bestMs,completed:true}));
+    if(stamp!==revision)return;
+    const done=new Map(saved.filter(r=>r.completed).map(r=>[r.levelId,r.bestMs]));
+    document.getElementById('progress-body')!.innerHTML=`<p class="progress-total"><strong>${officialCourses.filter(c=>done.has(c.id)).length}</strong> / 6 courses complete</p><ol class="progress-list">${officialCourses.map(c=>`<li><span>${escape(c.title)}<small>${themeName(c)}</small></span><b>${done.has(c.id)?`✓ ${((done.get(c.id)??0)/1000).toFixed(2)} s`:'Not completed'}</b></li>`).join('')}</ol>`;
+    message(session?'Best times are saved to your account.':"Guest progress is kept for this visit only. Sign in to retain future runs.");
+  }catch(error){if(stamp===revision)message(errorText(error),true);}
+}
+function credits() {
+  screen='credits';shell('Made for the climb.',`<section class="credits-panel"><h2>Game and art</h2><p>SkyStride Adventures is a software engineering class project. The gameplay, player, and first four course layouts are adapted from <a href="https://github.com/nunoamorim99/AstroHop" target="_blank" rel="noreferrer">Astro Hop by Nuno Amorim</a> (MIT).</p><p>Pixel Platformer sprites by <a href="https://kenney.nl/assets/pixel-platformer" target="_blank" rel="noreferrer">Kenney</a> (CC0). The sky courses draw level-design inspiration from World 7-6 of New Super Mario Bros. for Nintendo DS. Nintendo artwork is not included.</p><p>Built with Phaser, TypeScript, Vite, and Supabase. AI hints and editor feedback are reserved for a later phase.</p></section>`);
 }
 function auth(register: boolean) {
   screen = 'auth';
@@ -77,8 +148,8 @@ function auth(register: boolean) {
     ${register ? '<label>Display name<input name="displayName" required minlength="2" maxlength="24" autocomplete="nickname" pattern="[A-Za-z0-9 _-]{2,24}"></label>' : ''}
     <label>Email<input name="email" type="email" required maxlength="254" autocomplete="email"></label>
     <label>Password<input name="password" type="password" required minlength="${register ? 8 : 1}" maxlength="128" autocomplete="${register ? 'new-password' : 'current-password'}"></label>
-    <p class="small">${register ? 'Use 8–128 characters. Your password is handled by the authentication provider.' : 'Enter your registered email and password.'}</p>
-    <button type="submit" ${backend ? '' : 'disabled'}>${register ? 'Create account' : 'Sign in'}</button><p id="message" role="status" class="message">${backend ? '' : 'Online accounts are unavailable until Supabase is configured.'}</p></form>
+    <p class="small">${register ? 'Use 8–128 characters. Your password is handled by the authentication provider.' : localBackend ? 'Local preview accounts are separate from your public game account. Use a new test password.' : 'Enter your registered email and password.'}</p>
+    <button type="submit" ${backend ? '' : 'disabled'}>${register ? 'Create account' : 'Sign in'}</button><p id="message" role="status" class="message">${localBackend ? 'Local test authentication: no confirmation emails are sent.' : backend ? '' : 'Online accounts are unavailable until Supabase is configured.'}</p></form>
     <aside><h2>${register ? 'Your place in the clouds' : 'Ready for another run?'}</h2><p>Your account retains your profile, courses, completed runs, favorites, and achievements.</p>
     ${button('switch', register ? 'Already registered? Sign in' : 'New here? Create an account', true)}${button('back', 'Back to menu', true)}</aside></div>`);
   on('switch', () => auth(!register)); on('back', home);
@@ -132,12 +203,12 @@ async function levels() {
   try {
     const courses = await backend.catalog(session?.user.id); if (stamp !== revision) return;
     function render() {
-      const shown = orderCourses(courses, browseOrder, favoritesOnly), container = document.getElementById('courses')!;
+      const shown = orderCourses(favoritesOnly ? courses : courses.filter(c=>!c.officialOrder), browseOrder, favoritesOnly), container = document.getElementById('courses')!;
       container.replaceChildren();
       message(shown.length ? `${shown.length} published course${shown.length === 1 ? '' : 's'} loaded from the database.` : favoritesOnly ? 'No favorites yet. Play a course, then add it to your favorites.' : 'No published courses yet.');
       for (const [i, course] of shown.entries()) {
         const card = document.createElement('article'); card.className = 'course';
-        card.innerHTML = `<div class="course-preview" aria-hidden="true"><span>↗</span><i></i><i></i><i></i></div><div class="course-body"><span class="badge">${escape(course.difficulty)}</span><h2>${escape(course.title)}</h2><p>${escape(course.description)}</p><p class="course-stats">${stats(course)}${course.isFavorite ? ' · Your favorite' : ''}</p>${button(`course-${i}`, 'Play course')}${button(`details-${i}`, 'Course details', true)}${button(`ranking-${i}`, 'Leaderboard', true)}</div>`;
+        card.innerHTML = `${coursePicture(course)}<div class="course-body"><span class="badge">${escape(course.difficulty)}</span><h2>${escape(course.title)}</h2><p>${escape(course.description)}</p><p class="course-stats">${stats(course)}${course.isFavorite ? ' · Your favorite' : ''}</p>${button(`course-${i}`, 'Play course')}${button(`details-${i}`, 'Course details', true)}${button(`ranking-${i}`, 'Leaderboard', true)}</div>`;
         container.append(card);
         on(`course-${i}`, () => play(course, false)); on(`details-${i}`, () => courseDetails(course)); on(`ranking-${i}`, () => leaderboard(course));
       }
@@ -152,7 +223,7 @@ async function courseDetails(level: Level) {
     <div class="actions">${button('play-course', 'Play course')}${button('leaderboard', 'Leaderboard', true)}</div>
     <section class="community-panel" aria-label="Rating and favorites"><div id="interactions"></div></section><p id="message" class="message" role="status">Loading course details…</p>
     <div class="actions">${button('refresh-details', 'Refresh details', true)}${button('back', 'Back to courses', true)}</div>`);
-  on('play-course', () => play(level, false)); on('leaderboard', () => leaderboard(level)); on('back', levels); on('refresh-details', () => courseDetails(level));
+  on('play-course', () => play(level, false)); on('leaderboard', () => leaderboard(level)); on('back', level.officialOrder ? adventure : levels); on('refresh-details', () => courseDetails(level));
   const stamp = revision, uid = session?.user.id;
   if (!backend) { message('Online course details are unavailable until Supabase is configured.', true); return; }
   let state: InteractionState | undefined;
@@ -197,7 +268,7 @@ function editor() {
 }
 function settings() {
   screen = 'settings';
-  shell('Set your pace.', `<form id="settings-form"><h2>Motion preferences</h2><label class="check-label"><input id="reduced-motion" type="checkbox" ${prefersReducedMotion() ? 'checked' : ''}>Reduce decorative motion</label><p class="small">Applies to menu transitions and scrolling on this device. Gameplay controls, physics, and timing stay the same.</p><div class="actions"><button>Save settings</button><button id="reset-settings" type="button" class="secondary">Restore defaults</button></div></form><p id="message" class="message" role="status">${motionStorageError ? escape(motionStorageError) : 'Preferences are stored on this device.'}</p>${button('back', 'Back to menu', true)}`);
+  shell('Set your pace.', `<form id="settings-form"><h2>Motion preferences</h2><label class="check-label"><input id="reduced-motion" type="checkbox" ${prefersReducedMotion() ? 'checked' : ''}>Reduce decorative motion</label><p class="small">Reduces the title demonstration, decorative effects, menu transitions, and scrolling on this device. Course controls, physics, and timing stay the same.</p><div class="actions"><button>Save settings</button><button id="reset-settings" type="button" class="secondary">Restore defaults</button></div></form><p id="message" class="message" role="status">${motionStorageError ? escape(motionStorageError) : 'Preferences are stored on this device.'}</p>${button('back', 'Back to menu', true)}`);
   const preference = document.getElementById('reduced-motion') as HTMLInputElement;
   preference.onchange = () => message(preference.checked !== prefersReducedMotion() ? 'Unsaved preference. Select Save settings to apply and remember it.' : motionStorageError ?? 'No pending changes.', !!motionStorageError);
   const save = (value: boolean) => {
@@ -222,7 +293,7 @@ async function leaderboard(level: Level) {
   if (!session || !backend) { auth(false); return; }
   screen = 'leaderboard';
   shell('Course leaderboard.', `<p class="lead">${escape(level.title)} · Best completed time per player (top 50).</p><p class="small">Times are reported by the game client; this class project does not provide production anti-cheat.</p><p id="message" class="message" role="status">Loading results…</p><div id="ranking"></div><div class="actions">${button('refresh-ranking', 'Refresh leaderboard', true)}${button('back', 'Back to courses', true)}</div>`);
-  on('back', levels); on('refresh-ranking', () => leaderboard(level)); const stamp = revision;
+  on('back', level.officialOrder ? adventure : levels); on('refresh-ranking', () => leaderboard(level)); const stamp = revision;
   try {
     const rows = await backend.leaderboard(level.id); if (stamp !== revision) return;
     document.getElementById('ranking')!.innerHTML = rows.length ? `<table class="ranking"><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Time</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.rank}</td><td>${escape(row.display_name)}</td><td>${(row.elapsed_ms / 1000).toFixed(2)} s</td></tr>`).join('')}</tbody></table>` : '';
@@ -231,46 +302,76 @@ async function leaderboard(level: Level) {
 }
 async function play(level: Level, local: boolean) {
   screen = 'play'; const save = !local && !!session && !!backend;
-  shell(escape(level.title), `<div class="game-meta"><span class="badge">${local ? 'LOCAL PRACTICE' : save ? 'ACCOUNT RUN' : 'GUEST RUN'}</span><p>Move: ← / → or A / D · Jump: Space / ↑ / W</p></div><div id="game" class="game"></div>
-    <p id="message" class="message" role="status">${save ? 'Starting your account attempt…' : 'Practice results are not saved. Sign in and play a published course to save a time.'}</p>
-    <div class="actions">${button('pause', 'Pause', true)}${button('retry', 'Restart course', true)}<button id="save-result" hidden>Retry saving result</button>${local ? '' : button('details', 'Course details', true)}${button('back', 'Back to courses', true)}</div>
-    <div class="ai-placeholder"><button disabled aria-describedby="ai-hint-status">AI Hint</button><span id="ai-hint-status" class="small">Not available yet.</span></div>`);
-  let paused = false, attemptId: string | undefined, result: RunResult | undefined, saving = false, resultSaved = false;
-  const stamp = revision, uid = session?.user.id;
-  const resultText = () => `${(result!.elapsedMs / 1000).toFixed(2)} seconds · ${result!.deaths} deaths · ${result!.collected} / ${result!.totalItems} items`;
-  const canLeave = () => !save || !result || resultSaved || window.confirm('This result has not been confirmed saved. Leave this run?');
-  on('pause', () => currentGame?.scene.setPaused(!paused));
-  on('retry', () => { if (canLeave()) void play(level, local); });
-  on('back', () => { if (canLeave()) void levels(); });
-  on('details', () => { if (canLeave()) void courseDetails(level); });
-  const persist = async () => {
-    if (!attemptId || !result || stamp !== revision || saving) return;
-    const retry = document.getElementById('save-result') as HTMLButtonElement;
-    saving = true; retry.disabled = true; message('Course complete. Saving result…');
-    try {
-      await backend!.completeAttempt(attemptId, result.elapsedMs, result.deaths); if (stamp !== revision) return;
-      resultSaved = true;
-      retry.hidden = true; message(`Result saved! ${resultText()}. Your achievements and leaderboard are updated.`);
-    } catch (error) { if (stamp === revision) { retry.hidden = false; message(`Result not saved: ${errorText(error)}. Retry saving before leaving this screen.`, true); } }
-    finally { saving = false; if (stamp === revision) retry.disabled = false; }
+  shell(escape(level.title), `<div class="play-topline"><span class="badge">${level.officialOrder ? `LEVEL ${level.officialOrder} / 6` : 'COMMUNITY'} · ${themeName(level)}</span><div class="play-options">${button('sound','Sound on',true)}${button('fullscreen','Fullscreen',true)}${button('pause','Pause',true)}</div></div>
+    <div class="play-frame"><div id="game" class="game"></div><div id="run-overlay" class="run-overlay" hidden role="dialog" aria-labelledby="overlay-title"><div class="overlay-panel"><p id="overlay-kicker" class="eyebrow"></p><h2 id="overlay-title"></h2><p id="overlay-copy"></p><div id="overlay-actions" class="overlay-actions"></div></div></div></div>
+    <div id="run-hud" class="run-hud" aria-label="Run statistics"><span>COINS <b id="hud-coins">0 / ${level.layout.items.length}</b></span><span>TIME LEFT <b id="hud-time">—</b><small id="hud-elapsed">0.0 s elapsed</small></span><span>POWER <b id="hud-power">SMALL</b></span><span>LIVES <b id="hud-lives">3</b></span><span>SCORE <b id="hud-score">0</b></span></div>
+    <div class="touch-controls" aria-label="Touch game controls"><div><button data-control="left" aria-label="Move left">◀</button><button data-control="right" aria-label="Move right">▶</button></div><div><button data-control="fire" aria-label="Throw fireball">FIRE</button><button data-control="jump" aria-label="Jump">JUMP</button></div></div>
+    <p id="message" class="message" role="status">${save ? 'Starting your account attempt…' : 'Guest practice · This run is not saved to an account.'}</p>
+    <div class="actions run-actions">${button('retry','Restart course',true)}<button id="save-result" hidden>Retry saving result</button>${local?'':button('details','Course details',true)}${button('back','Level list',true)}${button('run-menu','Main menu',true)}</div>
+    <details class="controls-help"><summary>Controls & assistance</summary><p>← / → or A / D: move · Space / ↑ / W: jump · X / J: throw fireball · Esc: pause. Hold jump for more height.</p><div class="ai-placeholder"><button disabled aria-describedby="ai-hint-status">AI Hint</button><span id="ai-hint-status" class="small">Not available yet.</span></div></details>`);
+  let paused=false, attemptId:string|undefined, result:RunResult|undefined, saving=false,resultSaved=false;
+  const stamp=revision,uid=session?.user.id, list=level.officialOrder?adventure:levels;
+  const resultText=()=>`${(result!.elapsedMs/1000).toFixed(2)} seconds · ${result!.deaths} deaths · ${result!.collected} / ${result!.totalItems} items`;
+  runCanLeave=()=>!save||!result||resultSaved||window.confirm('This result has not been confirmed saved. Leave this run?');
+  const leave=(fn:()=>void|Promise<void>)=>navigate(fn);
+  let soundMuted=false;try{soundMuted=localStorage.getItem('skystride.audio-muted.v1')==='1';}catch{}
+  const soundControl=document.getElementById('sound') as HTMLButtonElement;soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');soundControl.disabled=level.layout.version===1;
+  on('sound',()=>{if(currentGame&&'setMuted' in currentGame.scene){soundMuted=!soundMuted;currentGame.scene.setMuted(soundMuted);soundControl.textContent=soundMuted?'Sound off':'Sound on';soundControl.setAttribute('aria-label',soundMuted?'Unmute audio':'Mute audio');try{if(localStorage.getItem('skystride.audio-muted.v1')!==(soundMuted?'1':'0'))message('Sound changed for this run, but the preference could not be saved.');}catch{message('Sound changed for this run, but browser storage is unavailable.');}}});
+  on('fullscreen',async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else message('Fullscreen is not available in this browser.');}catch{message('Fullscreen could not be opened. You can keep playing in this window.');}});
+  on('pause',()=>currentGame?.scene.setPaused(!paused));on('retry',()=>leave(()=>play(level,local)));on('back',()=>leave(list));on('run-menu',()=>leave(home));on('details',()=>leave(()=>courseDetails(level)));
+  const overlay=(state:RunState)=>{
+    if(stamp!==revision)return; paused=state.status==='paused';
+    const pause=document.getElementById('pause') as HTMLButtonElement;
+    pause.textContent=paused?'Resume':'Pause';pause.disabled=state.status==='complete'||state.status==='dead';
+    const panel=document.getElementById('run-overlay')!;panel.hidden=state.status==='playing';
+    if(panel.hidden)return;
+    const complete=state.status==='complete', dead=state.status==='dead';
+    document.getElementById('overlay-kicker')!.textContent=complete?level.officialOrder===6?'ALL SIX HORIZONS':'FLAG REACHED':dead?'ANOTHER CHANCE':'TAKE A BREATHER';
+    document.getElementById('overlay-title')!.textContent=complete?level.officialOrder===6?'Adventure complete!':'Course complete!':dead?'Back into the sky.':'Paused';
+    document.getElementById('overlay-copy')!.textContent=complete?(result?resultText():'A little courage goes a long way.'):dead?(state.reason||'Take another run from your checkpoint or restart the course.'):'Your run will be here when you’re ready.';
+    const next=nextOfficialCourse(level);
+    document.getElementById('overlay-actions')!.innerHTML=`${complete&&next?button('next-level','Next level'):''}${!complete&&!dead?button('resume-run','Resume'):''}${dead?button('respawn',state.hasCheckpoint?'Resume at checkpoint':'Retry from start'):''}${button('replay',complete?'Replay':'Restart course',true)}${button('overlay-levels','Level list',true)}${button('overlay-menu','Main menu',true)}`;
+    on('resume-run',()=>currentGame?.scene.setPaused(false));on('respawn',()=>currentGame?.scene.resumeAfterDeath());on('replay',()=>leave(()=>play(level,local)));on('overlay-levels',()=>leave(list));on('overlay-menu',()=>leave(home));on('next-level',()=>leave(()=>startOfficial(next!)));
+    document.querySelector<HTMLButtonElement>('#overlay-actions button')?.focus({preventScroll:true});
   };
-  on('save-result', persist);
-  try {
-    if (save) { attemptId = await backend!.startAttempt(uid!, level.id); if (stamp !== revision) return; message('Reach the gold flag. Your completed result will be saved.'); }
-    currentGame = mountGame(document.getElementById('game')!, level, completed => {
-      if (stamp !== revision) return;
-      (document.getElementById('pause') as HTMLButtonElement).disabled = true; result = completed;
-      if (save) void persist(); else message(`Course complete! ${resultText()}. Practice result is not saved.`);
-    });
-    currentGame.game.events.on('pause-changed', (value: boolean) => { paused = value; const control = document.getElementById('pause'); if (control) control.textContent = paused ? 'Resume' : 'Pause'; });
-  } catch (error) { if (stamp === revision) message(`Could not start the course: ${errorText(error)}. Restart to retry.`, true); }
+  const hud=(state:RunHud)=>{
+    if(stamp!==revision)return;
+    for(const [id,text] of Object.entries({'hud-coins':`${state.collected} / ${state.totalItems}`,'hud-time':`${Math.ceil(state.timeLeft)} s`,'hud-elapsed':`${(state.elapsedMs/1000).toFixed(1)} s elapsed`,'hud-power':state.star?'STAR':state.power,'hud-lives':String(state.lives),'hud-score':String(state.score)}))document.getElementById(id)!.textContent=text;
+  };
+  const persist=async()=>{
+    if(!attemptId||!result||stamp!==revision||saving)return;
+    const retry=document.getElementById('save-result') as HTMLButtonElement;
+    saving=true;retry.disabled=true;message('Course complete. Saving result…');
+    try{await backend!.completeAttempt(attemptId,result.elapsedMs,result.deaths);if(stamp!==revision)return;resultSaved=true;retry.hidden=true;message(`Result saved! ${resultText()}. Your progress, achievements, and leaderboard are updated.`);}
+    catch(error){if(stamp===revision){retry.hidden=false;message(`Result not saved: ${errorText(error)}. Retry saving before leaving this screen.`,true);}}
+    finally{saving=false;if(stamp===revision)retry.disabled=false;}
+  };
+  on('save-result',persist);
+  const escapeKey=(event:KeyboardEvent)=>{if(event.code==='Escape'&&!event.repeat&&!(event.target instanceof HTMLInputElement||event.target instanceof HTMLTextAreaElement||event.target instanceof HTMLSelectElement)){event.preventDefault();currentGame?.scene.setPaused(!paused);}};
+  const fullscreenChanged=()=>{const control=document.getElementById('fullscreen');if(control)control.textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen';};
+  document.addEventListener('keydown',escapeKey);document.addEventListener('fullscreenchange',fullscreenChanged);fullscreenChanged();screenCleanup=()=>{document.removeEventListener('keydown',escapeKey);document.removeEventListener('fullscreenchange',fullscreenChanged);};
+  try{
+    if(save){attemptId=await backend!.startAttempt(uid!,level.id);if(stamp!==revision)return;message('Reach the flag. Your completed result will be saved.');}
+    currentGame=mountGame(document.getElementById('game')!,level,completed=>{
+      if(stamp!==revision)return;result=completed;
+      if(!save)guestProgress.set(level.id,Math.min(guestProgress.get(level.id)??Infinity,completed.elapsedMs));
+      overlay({status:'complete',hasCheckpoint:false,lives:0});
+      if(save)void persist();else message(`Course complete! ${resultText()}. Guest result is not saved to an account.`);
+    },{onState:overlay,onHud:hud});
+    for(const control of document.querySelectorAll<HTMLButtonElement>('[data-control]')){
+      const action=control.dataset.control as ControlAction;
+      control.onpointerdown=event=>{event.preventDefault();control.setPointerCapture(event.pointerId);currentGame?.scene.setControl(action,true);};
+      const release=()=>currentGame?.scene.setControl(action,false);
+      control.onpointerup=release;control.onpointercancel=release;control.onlostpointercapture=release;
+    }
+  }catch(error){if(stamp===revision)message(`Could not start the course: ${errorText(error)}. Restart to retry.`,true);}
 }
 async function start() {
-  home(); if (!backend) return;
+  title(); if (!backend) return;
   backend.client.auth.onAuthStateChange((_event, next) => {
     if (_event === 'SIGNED_IN') accountStatusError = '';
     const previous = session?.user.id; session = next;
-    if (previous !== next?.user.id) setTimeout(() => {
+    if (_event !== 'INITIAL_SESSION' && previous !== next?.user.id) setTimeout(() => {
       favoritesOnly = false;
       if (screen === 'auth' && next) void profile(); else home();
     }, 0);

@@ -1,6 +1,8 @@
 # Database dictionary
 
-SkyStride uses PostgreSQL on Supabase. The Sprint 4 application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. Passwords, confirmation tokens and authentication sessions remain in managed Supabase Auth. The application does not store or read credential columns.
+SkyStride uses PostgreSQL on Supabase. The application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. V2 retains these tables and adds course format support and account progress aggregation. The three V2 migrations below are verified locally and have not been applied to hosted Supabase.
+
+In production, passwords, confirmation tokens and authentication sessions remain in managed Supabase Auth. Application tables do not store or read credential columns. The isolated [local Auth/REST fixture](LOCAL_DEVELOPMENT.md) uses separate local credentials and does not verify managed Auth or email delivery.
 
 ## Installation and upgrades
 
@@ -11,8 +13,13 @@ Migration files are ordered and transactional:
 3. `supabase/migrations/20261019144913_sprint3_progress_and_drafts.sql`
 4. `supabase/migrations/20261109042116_sprint4_publishing_and_community.sql`
 5. `supabase/migrations/20261109043347_sprint4_non_retrying_revision_conflicts.sql`
+6. `supabase/migrations/20261109055844_overhaul_v2_course_format.sql`
+7. `supabase/migrations/20261109060418_overhaul_official_courses.sql`
+8. `supabase/migrations/20261109062810_overhaul_render_budget.sql`
 
-For a **fresh project**, apply all five once in that order, then run `supabase/seed.sql` to install First Flight. Configure the frontend with the project URL and publishable key, and configure the hosted URL in Supabase Auth's redirect allowlist. Never put a service-role key in the frontend.
+For a **fresh V2 project**, apply all eight once in that order, then run `supabase/seed.sql` to install legacy First Flight while compatibility is retained. Migration 7 installs the six new official courses. Configure the frontend with the project URL and publishable key, and configure the hosted URL in Supabase Auth's redirect allowlist. Never put a service-role key in the frontend.
+
+For the **existing Sprint 4 project**, inspect installed history and objects, then apply only missing migrations 6–8 during the later V2 cutover. They preserve V1 layouts, existing records, RPC contracts and permissions. `official_order` is server-owned; application roles cannot select their own official placement. The official-course migration refuses conflicting existing records instead of overwriting published layouts. [Cutover and retirement notes](OVERHAUL.md#later-cutover-and-v1-retirement) describe hosted verification and the separate archive/removal phase.
 
 For the **existing Sprint 2 project**, inspect the hosted schema and migration history first. Preserve its profiles, published seed course and interaction records. Once the two core migrations are confirmed installed, apply only the missing Sprint 3 migration followed by both Sprint 4 migrations. Do not rerun `001_core.sql`, reset the database, reseed existing courses, or replace existing data. If the privilege/index correction is missing, reconcile that specific migration before continuing. A migration version alone is not proof that its expected tables, policies and grants exist; verify both history and actual objects.
 
@@ -41,7 +48,8 @@ The auth signup trigger creates the profile. Leaderboards expose display names t
 | title | TEXT | No | CHECK trimmed length 1–60 | Course title |
 | description | TEXT | No | DEFAULT empty; CHECK length <= 280 | Course summary |
 | difficulty | TEXT | No | CHECK easy / medium / hard | Difficulty label |
-| layout | JSONB | No | Version 1, 24 columns, 14 rows; validated geometry | Platforms, hazards, checkpoints, items, start and finish |
+| layout | JSONB | No | Validated V1 or V2 geometry and bounded declarative component data | Course components, theme, start and finish |
+| official_order | SMALLINT | Yes | UNIQUE; CHECK 1–6; server-owned | Stable ordering of the six new official courses; NULL for other courses |
 | published | BOOLEAN | No | DEFAULT false | Public visibility; publication RPC controls transition |
 | revision | INTEGER | No | DEFAULT 1; CHECK > 0 | Server-managed version of saved metadata/layout |
 | created_at | TIMESTAMPTZ | No | DEFAULT now() | Creation timestamp |
@@ -138,6 +146,7 @@ All UUID identities and expected revisions below are checked on the server. The 
 | `complete_attempt` | `p_attempt_id uuid`, `p_elapsed_ms integer`, `p_deaths integer` | Attempt UUID; completion and qualifying awards are atomic | Authenticated attempt owner |
 | `level_leaderboard` | `p_level_id uuid` | Rows of `rank bigint`, `display_name text`, `elapsed_ms integer`; one best result per player, ties share rank, UUID tie-break, top 50 | Authenticated; published courses only |
 | `level_statistics` | None | Rows of `level_id uuid`, `average_rating numeric`, `rating_count bigint`, `favorite_count bigint`; unrated average NULL and empty counts zero | Anonymous and authenticated; published courses only |
+| `own_progress` | None | Rows of `level_id uuid`, `best_ms integer`; minimum elapsed time from the caller's completed attempts; ordered by course UUID | Authenticated; invoker security, explicit owner filter and RLS |
 
 `save_draft` locks the owner record. Retrying an identical create with its original UUID or an identical update after a lost response returns the current record without duplicates or extra revision increments. Different content with a stale expected revision fails with SQLSTATE `PT409` (HTTP 409); the frontend retains local edits for reload or save-as-copy. Matching current content is a harmless retry even if its expected revision is older. Stale start-test, complete-test and publish calls use the same conflict code. PostgREST supports this status mapping through its [custom error codes](https://docs.postgrest.org/en/stable/references/errors.html#raise-errors-with-http-status-codes).
 
@@ -155,7 +164,9 @@ Privileged implementations live in `private`, use `SECURITY DEFINER` only where 
 
 ## Geometry, local state and trust model
 
-Client and SQL validation require version 1, a 24 × 14 grid, integer coordinates, 1–60 platform segments, at most 50 of each point type, distinct start/finish and unique positions within each hazard/checkpoint/item array. Start, finish and checkpoints must be outside platforms/hazards and directly supported by a platform. Items must be in bounds and outside platforms/hazards; airborne items are allowed. SQL also caps the stored layout size at 128 KiB. These checks validate geometry, not reachability.
+Legacy V1 validation remains unchanged: a 24 × 14 grid, integer coordinates, 1–60 platform segments, at most 50 of each point type, distinct start/finish and unique positions within each hazard/checkpoint/item array. Start, finish and checkpoints must be outside platforms/hazards and directly supported by a platform. Items must be in bounds and outside platforms/hazards; airborne items are allowed. SQL caps V1 stored layout size at 128 KiB.
+
+V2 uses 18px tiles, 25 rows and 24–512 columns with overworld, cave or sky themes. Client and SQL whitelist exact fields and component types; executable data, URLs, pipes and teleport hooks are excluded. Per-array bounds, a 4,096-component cap, a 256 KiB payload limit and a 32,768 expanded-tile budget constrain rendering work. Runs count by width, obstacles by width × height and other components individually. Starts, finishes and checkpoints must be safe and supported; items and loose power-ups must be outside solids and hazards. Moving-platform endpoints stay within the world. The validators check geometry and resource bounds, not reachability; saved-version playtesting remains required for publication.
 
 Items stay in `layout.items`; there is no item table. Collected IDs/counts, active checkpoint, timer and current run state are local to an attempt. Item counts do not affect course completion, saved results, awards or publication. The reduced-motion preference is device-local browser storage and has no database table. AI controls are unavailable placeholders; there are no AI tables, provider keys or provider requests.
 

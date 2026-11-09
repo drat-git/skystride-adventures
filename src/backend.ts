@@ -3,7 +3,11 @@ import { parseLevel, validateLayout, type Level } from './level';
 import { validateAccount, validateLogin, validateDisplayName } from './auth';
 const url = import.meta.env.VITE_SUPABASE_URL?.trim();
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
-export const configured = Boolean(url && key && /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url) && !url.includes('YOUR_PROJECT') && !key.includes('YOUR_PUBLIC'));
+export const localBackend = import.meta.env.VITE_BACKEND_MODE === 'local';
+const localMatch = url?.match(/^http:\/\/(127\.0\.0\.1|localhost):([0-9]{1,5})\/?$/);
+const localUrl = Boolean(localMatch && Number(localMatch[2]) > 0 && Number(localMatch[2]) <= 65535);
+const hostedUrl = Boolean(url && /^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/.test(url) && !url.includes('YOUR_PROJECT'));
+export const configured = Boolean(key && !key.includes('YOUR_PUBLIC') && (localBackend ? localUrl : hostedUrl && (!import.meta.env.DEV || import.meta.env.VITE_ALLOW_HOSTED_DEV === 'true')));
 export interface OwnedLevel extends Level { revision:number; published:boolean; canPublish:boolean }
 export interface CourseSummary extends Level { averageRating:number|null; ratingCount:number; favoriteCount:number; isFavorite:boolean }
 export interface InteractionState { rating:number|null; favorite:boolean; eligible:boolean }
@@ -17,7 +21,7 @@ export class Backend {
   readonly client: SupabaseClient;
   constructor() {
     if (!configured) throw new Error('Online accounts need the Supabase project configuration.');
-    this.client = createClient(url!, key!, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    this.client = createClient(url!, key!, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,...(localBackend?{storageKey:`skystride.local.auth.${new URL(url!).port}`}:{})}});
   }
   async register(email: string, password: string, displayName: string) {
     validateAccount(email,password,displayName);
@@ -39,7 +43,7 @@ export class Backend {
     if(error)throw error;return data.display_name as string;
   }
   async levels(): Promise<Level[]> {
-    const {data,error}=await this.client.from('levels').select('id,title,description,difficulty,layout').eq('published',true).order('title');
+    const {data,error}=await this.client.from('levels').select('id,title,description,difficulty,layout,official_order').eq('published',true).order('title');
     if(error)throw error;return data.map(parseLevel);
   }
   async startAttempt(userId:string,levelId:string):Promise<string> {
@@ -49,6 +53,11 @@ export class Backend {
   async completeAttempt(id:string,elapsedMs:number,deaths:number) {
     const {error}=await this.client.rpc('complete_attempt',{p_attempt_id:id,p_elapsed_ms:elapsedMs,p_deaths:deaths});
     if(error)throw error;
+  }
+  async progress(_userId:string):Promise<{levelId:string;completed:boolean;bestMs:number|null}[]> {
+    const {data,error}=await this.client.rpc('own_progress');
+    if(error)throw error;
+    return (data as {level_id:string;best_ms:number}[]).map(row=>({levelId:row.level_id,completed:true,bestMs:row.best_ms}));
   }
   async ownedLevels(_userId:string):Promise<OwnedLevel[]> {
     const {data,error}=await this.client.rpc('owned_levels');

@@ -1,12 +1,18 @@
+import { validateLayoutV2, type LayoutV2 } from './course-format';
 export const COLS = 24, ROWS = 14, TILE = 32;
 export type Point = { x: number; y: number };
 export type Platform = Point & { width: number };
 export interface Layout { version: 1; cols: 24; rows: 14; start: Point; finish: Point; platforms: Platform[]; hazards: Point[]; checkpoints: Point[]; items: Point[] }
-export interface Level { id: string; title: string; description: string; difficulty: 'easy' | 'medium' | 'hard'; layout: Layout }
+export type CourseLayout = Layout | LayoutV2;
+export interface Level { id: string; title: string; description: string; difficulty: 'easy' | 'medium' | 'hard'; layout: CourseLayout; officialOrder?: number }
 const record = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const integer = (v: unknown, min: number, max: number): v is number => Number.isInteger(v) && Number(v) >= min && Number(v) <= max;
 const point = (v: unknown): v is Point => record(v) && integer(v.x, 0, COLS - 1) && integer(v.y, 0, ROWS - 2);
-export function validateLayout(v: unknown): asserts v is Layout {
+export function validateLayout(v: unknown): asserts v is CourseLayout {
+  if (record(v) && v.version === 2) { validateLayoutV2(v); return; }
+  validateLegacyLayout(v);
+}
+export function validateLegacyLayout(v: unknown): asserts v is Layout {
   if (!record(v) || v.version !== 1 || v.cols !== COLS || v.rows !== ROWS) throw new Error('Unsupported level format. Expected version 1, 24 × 14 tiles.');
   if (!point(v.start) || !point(v.finish) || (v.start.x === v.finish.x && v.start.y === v.finish.y)) throw new Error('Level needs distinct valid start and finish positions.');
   for (const key of ['hazards', 'checkpoints', 'items']) {
@@ -26,7 +32,7 @@ export function validateLayout(v: unknown): asserts v is Layout {
     if (!platforms.some(t => t.y === p.y + 1 && p.x >= t.x && p.x < t.x + t.width)) throw new Error('Start, finish and checkpoints need a supporting platform.');
   }
 }
-export const practiceLevel: Level = {
+export const practiceLevel: Level & { layout: Layout } = {
   id: '11111111-1111-4111-8111-111111111111', title: 'First Flight', difficulty: 'easy',
   description: 'Jump over the coral hazards and reach the gold flag.',
   layout: { version:1, cols:24, rows:14, start:{x:1,y:11}, finish:{x:22,y:11},
@@ -36,5 +42,7 @@ export const practiceLevel: Level = {
 export function parseLevel(v: unknown): Level {
   if (!record(v) || typeof v.id !== 'string' || typeof v.title !== 'string' || !v.title.trim() || typeof v.description !== 'string' || !['easy','medium','hard'].includes(String(v.difficulty))) throw new Error('Invalid level record.');
   validateLayout(v.layout);
-  return {id:v.id,title:v.title,description:v.description,difficulty:v.difficulty as Level['difficulty'],layout:v.layout};
+  const officialOrder = v.official_order ?? v.officialOrder;
+  if (officialOrder != null && !integer(officialOrder, 1, 6)) throw new Error('Invalid official course order.');
+  return {id:v.id,title:v.title,description:v.description,difficulty:v.difficulty as Level['difficulty'],layout:v.layout,...(officialOrder == null ? {} : {officialOrder:Number(officialOrder)})};
 }
