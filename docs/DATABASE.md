@@ -1,6 +1,6 @@
 # Database dictionary
 
-SkyStride uses PostgreSQL on Supabase. The application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. V2 retains these tables and adds course format support and account progress aggregation. The three V2 migrations below are verified locally and have not been applied to hosted Supabase.
+SkyStride uses PostgreSQL on Supabase. The application schema has eight public tables: five core tables, two achievement tables added in Sprint 3, and `draft_playtests` added in Sprint 4. V2 retains these tables and adds course format support and account progress aggregation. The three V2 migrations below were verified locally and applied to hosted Supabase on 9 November 2026. See [the release record](OVERHAUL_VERIFICATION.md) for hosted migration IDs and preservation evidence.
 
 In production, passwords, confirmation tokens and authentication sessions remain in managed Supabase Auth. Application tables do not store or read credential columns. The isolated [local Auth/REST fixture](LOCAL_DEVELOPMENT.md) uses separate local credentials and does not verify managed Auth or email delivery.
 

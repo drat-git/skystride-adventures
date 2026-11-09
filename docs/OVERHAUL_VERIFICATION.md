@@ -2,7 +2,7 @@
 
 Branch: `codex/skystride-game-overhaul`. Starting commit: `be87f686d6418706399e32dacb10dd2f72a2ee8c`. The active specification is retained unchanged at `output/overhaul/sources/overhaul-plan.rtf`. The earlier audit plan is paused. Pre-existing report changes remain untouched and outside the overhaul commit.
 
-All verification below used isolated local databases and desktop Chrome. No hosted schema, data or deployment was changed. PostgreSQL constraints, functions, triggers and RLS are real; local Auth/REST are fixtures. This does not establish managed Supabase Auth, confirmation email or hosted PostgREST acceptance for V2.
+The pre-release results below used isolated local databases and desktop Chrome. PostgreSQL constraints, functions, triggers and RLS were real; local Auth/REST were fixtures. Hosted release verification is recorded separately at the end of this file. The local results alone do not establish managed Supabase Auth, confirmation email or hosted PostgREST acceptance for V2.
 
 ## Results
 
@@ -48,4 +48,31 @@ SkyStride retains attempt-local coins and cumulative active time through checkpo
 
 Representative captures: `local-preview-title.png`, `local-preview-courses.png`, `acceptance/02-workshop.png`, `acceptance/03-community-complete.png`, `acceptance/04-leaderboard.png`, `acceptance/06-progress.png`, `acceptance/07-adventure-complete.png`, `production-evidence/cave-gameplay.png`, and the six course completion images in their evidence directories.
 
-The short rendering sample is not a hardware-wide performance guarantee. Phaser produces a large bundled JavaScript chunk; Vite reports that warning while completing successfully. Mobile work is deferred. V1 compatibility remains until a separately verified hosted cutover and recoverable retirement migration. Real AI, report and presentation work remain outside this phase. The [cutover plan](OVERHAUL.md#later-cutover-and-v1-retirement) includes managed Auth/PostgREST and real confirmation-email verification before production acceptance.
+The short rendering sample is not a hardware-wide performance guarantee. Phaser produces a large bundled JavaScript chunk; Vite reports that warning while completing successfully. Mobile work is deferred. V1 compatibility remains until a separate recoverable retirement migration. Real AI, report and presentation work remain outside this phase. The [cutover plan](OVERHAUL.md#later-cutover-and-v1-retirement) describes retained compatibility and future cleanup.
+
+## Hosted release — 9 November 2026
+
+The user authorized migrating the current Supabase project and pushing the game to `main`. Implementation commit `6deb86b3e7afa46b64cd9dc4d3eba78c2ad4b490` was fast-forwarded to `main`; [GitHub Pages run 42577437161](https://github.com/drat-git/skystride-adventures/actions/runs/42577437161) passed all 218 tests, TypeScript/build and deployment. The public game is [SkyStride Adventures](https://drat-git.github.io/skystride-adventures/).
+
+Only the three missing V2 migrations were applied to healthy project `djoiiitpyntcgnuqemiu`. Hosted migration versions are assigned by the connected migration service; the local SQL files remain unchanged.
+
+| Local migration | Hosted version | Name |
+| --- | --- | --- |
+| `20261109055844` | `20261109070702` | `overhaul_v2_course_format` |
+| `20261109060418` | `20261109070709` | `overhaul_official_courses` |
+| `20261109062810` | `20261109070712` | `overhaul_render_budget` |
+
+Before and immediately after migration, row counts and canonical row checksums matched for all existing records: 7 profiles, 5 V1 levels, 12 attempts, 3 ratings, 3 favorites, 3 achievement definitions, 7 earned awards and 5 draft playtests. The only added level field was nullable `official_order`; it was excluded from the old-row checksum. Six new official records match the checked-in layouts exactly through anonymous PostgREST. All eight public tables retain RLS; anonymous private-progress access and direct official-order writes remain denied. Existing security advisors reported only the pre-existing leaked-password-protection warning, with no new database advisory.
+
+Real hosted browser acceptance passed **6 comprehensive groups**, with **zero browser errors and zero HTTP failures**, using the existing dedicated confirmed test accounts:
+
+- Public title, six official records, actual keyboard movement/jump/pause and level-list navigation; production DEV snapshot seam absent.
+- Managed account login, V2 draft/theme/component save and reload, intact metadata typing during preview, and no publication approval from unsaved preview.
+- Actual keyboard completion of the saved revision, backend approval, immutable publication and a separate unapproved private copy.
+- Second-account privacy, discovery, actual keyboard completion with checkpoint/coin, saved results, rating/favorite, leaderboard and completion achievement.
+- Independent results and correct shared aggregates from two accounts: average 4.0, two ratings, two favorites.
+- Reload, My Favorites, rating order, replacement/removal, unfavorite, logout/login persistence and private progress RPC.
+
+The run created only dedicated verification records: published course `ee6e7e44-720c-4465-aa6c-72e9ada84441` and private copy `a0c8b6f9-8283-4cd7-b568-cc5c355ed13d`, plus their test attempts/interactions. No original user records were edited or deleted.
+
+Evidence under `output/overhaul/`: `hosted-migration-evidence.json`, `hosted-api-preflight.json`, `hosted-pages-build.log`, and `hosted-evidence/20261109T071001Z/results.json` with eight screenshots. The reusable opt-in check is `scripts/test-overhaul-hosted.mjs`. Official hosted gameplay was a movement/jump/pause check; full completion of all six remains the prior local keyboard evidence. Existing confirmed-account login was verified; no new registration or confirmation email was requested in this release. The user's earlier confirmation-email success remains separately recorded in the Sprint 4 evidence.

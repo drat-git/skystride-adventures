@@ -2,7 +2,7 @@
 
 The active specification is the unchanged `output/overhaul/sources/overhaul-plan.rtf` (original `/Users/Darsh/Downloads/overhaul-plan.rtf`). Its readable extraction and source index live beside it. Reread that specification after context compaction. The earlier audit-results plan is paused. Report generation, presentation work, and real AI integration are outside this overhaul.
 
-Development branch: `codex/skystride-game-overhaul`, based on `be87f686d6418706399e32dacb10dd2f72a2ee8c`. The pre-existing dirty report work was archived in `output/overhaul/baseline-working-tree.zip` and `baseline.patch`; it is not part of this change.
+Development branch: `codex/skystride-game-overhaul`, based on `be87f686d6418706399e32dacb10dd2f72a2ee8c`. The user subsequently authorized production migration and promotion to `main`; implementation commit `6deb86b` was deployed on 9 November 2026. The pre-existing dirty report work was archived in `output/overhaul/baseline-working-tree.zip` and `baseline.patch`; it is not part of this change.
 
 ## Baseline review
 
@@ -51,7 +51,7 @@ DS reference map, inspected directly: <https://www.mariouniverse.com/wp-content/
 
 ## Data and isolation
 
-The user selected an isolated local database for development. No overhaul migration, seed, or data retirement has been applied to the hosted Supabase project. The existing `.env.local` is preserved; local development overrides its URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that this workflow does not set.
+The user selected an isolated local database for development, then authorized the hosted release after local verification. The three tested V2 migrations and six official courses are now installed in the existing Supabase project. Pre/post checksums confirm that the eight tables' existing records were unchanged by migration. No data retirement was performed. The existing `.env.local` is preserved; local development overrides its URL/key in process and uses a distinct auth-storage key. Hosted access from a development build requires an explicit opt-in that the local launcher does not set.
 
 The existing eight tables remain. V2 expands the declarative `levels.layout` JSON, replaces the fixed-V1 validation constraints with a V1/V2 dispatcher, and adds server-owned `official_order`. Existing save, playtest, publication, community, and completion contracts remain. Progress is aggregated from existing completed attempts; no duplicate progress table is introduced.
 
@@ -59,11 +59,11 @@ Local testing runs the real Postgres schema, functions, triggers, constraints, a
 
 ## Later cutover and V1 retirement
 
-After V2 is verified, deploy the three tested additive migrations (including six official courses) to the current Supabase project, then deploy the matching frontend. Recheck hosted authentication, RPC behavior, RLS, persistence, asset base paths, and two-account publication/community interactions before retiring anything.
+The first V2 cutover applied the three tested additive migrations (including six official courses) to the current Supabase project, then deployed the matching frontend through GitHub Pages. Hosted authentication, RPC behavior, persistence, asset base paths, and two-account publication/community evidence are tracked in [the release record](OVERHAUL_VERIFICATION.md). Retiring V1 remains a separate operation.
 
 The user permits V1 levels, layouts, and frontend removal once V2 is ready. Before that cleanup, produce a recoverable database export and an exact affected-row inventory for V1 courses and their attempts, playtests, ratings and favorites. Preserve accounts/profiles and already-earned achievements. Retarget the old timed First Flight achievement to an explicitly chosen V2 challenge with a verified threshold before removing its course; keep earned awards intact. Stage the removal in a separate reviewed migration, then remove the legacy runtime/types/tests and the Classic practice entry. Never repurpose an old course UUID for a different layout or mix its historical times with new rankings.
 
-Rollback before retirement: restore the previous frontend; additive V1-compatible schema remains. Rollback after retirement requires the archived records and prior frontend. Do not combine data deletion with the first V2 rollout.
+Rollback before retirement must account for the old frontend's V1-only parser: preserve the additive schema and either use a compatibility frontend that filters unsupported layouts or prepare a reversible change to new-course visibility before restoring the old frontend. Restoring the old bundle alone would break its mixed-version community listing. Rollback after retirement also requires the archived records. Do not combine data deletion with the first V2 rollout.
 
 ## Verification
 
